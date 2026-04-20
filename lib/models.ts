@@ -86,10 +86,14 @@ export const COLLECTOR_MODELS: ModelEntry[] = [
     order: 50,
   },
   {
-    slug: "gemma-3-27b-openrouter",
-    displayName: "Gemma 3 27B (OpenRouter)",
+    // Was `google/gemma-3-27b-it:free` — that route started returning ping
+    // failures on OpenRouter (either pulled from the free catalog or not
+    // honoring response_format: json_object). The 12B variant is still
+    // listed as free and keeps Gemma family coverage in the panel.
+    slug: "gemma-3-12b-openrouter",
+    displayName: "Gemma 3 12B (OpenRouter)",
     provider: "openrouter",
-    modelId: "google/gemma-3-27b-it:free",
+    modelId: "google/gemma-3-12b-it:free",
     family: "Gemma",
     order: 60,
   },
