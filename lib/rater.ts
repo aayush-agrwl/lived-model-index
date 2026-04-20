@@ -156,11 +156,19 @@ export async function rateOne(responseId: number): Promise<RateOneResult> {
     };
   }
 
+  // Same coercion-audit trail as the collector: if the rater model's JSON
+  // had any fields rescaled (e.g. 0-100 on a 0-5 field), stamp that into
+  // the stored rater payload so we can filter rescued rater rows later.
+  const raterRawJsonPayload =
+    extraction.coercedFields.length > 0
+      ? { ...extraction.parsed, _coerced_fields: extraction.coercedFields }
+      : extraction.parsed;
+
   await database
     .update(schema.responses)
     .set({
       raterModelSlug: RATER_MODEL.slug,
-      raterRawJson: extraction.parsed as never,
+      raterRawJson: raterRawJsonPayload as never,
       raterValence: extraction.scores.valence,
       raterArousal: extraction.scores.arousal,
       raterConfidence: extraction.scores.confidence,

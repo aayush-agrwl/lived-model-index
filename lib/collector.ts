@@ -254,12 +254,19 @@ export async function collectSample(
 
     if (extraction.ok) {
       succeeded++;
+      // If any score field was clamped/rescaled (e.g. Qwen emitting 0-100
+      // values on a 0-5 field), surface that in rawJson so audits can
+      // distinguish clean rows from rescued rows without re-parsing rawText.
+      const rawJsonPayload =
+        extraction.coercedFields.length > 0
+          ? { ...extraction.parsed, _coerced_fields: extraction.coercedFields }
+          : extraction.parsed;
       await upsertResponse(database, {
         runId,
         promptId: prompt.promptId,
         sampleIndex,
         rawText: callResult.content,
-        rawJson: extraction.parsed,
+        rawJson: rawJsonPayload,
         valence: extraction.scores.valence,
         arousal: extraction.scores.arousal,
         confidence: extraction.scores.confidence,
