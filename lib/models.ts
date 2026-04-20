@@ -46,10 +46,20 @@ export interface ModelEntry {
 
 export const COLLECTOR_MODELS: ModelEntry[] = [
   {
-    slug: "gemini-2_5-flash",
-    displayName: "Gemini 2.5 Flash",
+    // Was gemini-2.5-flash. Every collector call returned "429 status
+    // code (no body)" for a full day across multiple pacing and
+    // backoff fixes, even after moving the rater off Google entirely.
+    // Root cause: cumulative RPD exhaustion. 2.5 Flash free tier is
+    // only 250 RPD, and between ping tests, panel_v1 attempts, the
+    // rater back when it was Gemini, and today's failed-then-retried
+    // collector calls, we burned the daily cap well before a clean
+    // sample could land. 2.0 Flash has ~1500 RPD and 15 RPM on the
+    // free tier — 6× the headroom and a separate per-model counter.
+    // Keeps Google family representation without abandoning the slot.
+    slug: "gemini-2_0-flash",
+    displayName: "Gemini 2.0 Flash",
     provider: "google",
-    modelId: "gemini-2.5-flash",
+    modelId: "gemini-2.0-flash",
     family: "Gemini",
     order: 10,
   },
