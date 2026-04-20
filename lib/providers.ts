@@ -84,29 +84,65 @@ export interface ChatCallResult {
   providerModelId: string | null;
 }
 
+/**
+ * Transient errors worth retrying. 4xx for quota / 429 / 408, 5xx in general.
+ * A daily TPD exhaustion (message mentions "try again in" with minutes) is
+ * explicitly NOT retried — sleeping 15 minutes inside a 60s serverless
+ * function is pointless.
+ */
+function isRetriable(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  if (/try again in \d+m/i.test(msg)) return false; // long cooldown — give up
+  if (/per day|TPD/i.test(msg)) return false; // daily quota — give up
+  if (/\b429\b/.test(msg)) return true;
+  if (/\b408\b/.test(msg)) return true;
+  if (/\b5\d\d\b/.test(msg)) return true;
+  if (/ECONNRESET|ETIMEDOUT|fetch failed/i.test(msg)) return true;
+  return false;
+}
+
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function chatCall(params: ChatCallParams): Promise<ChatCallResult> {
   const { provider, modelId, messages, temperature, topP, maxTokens, jsonMode } = params;
   const client = clientFor(provider);
 
-  const started = Date.now();
-  const completion = await client.chat.completions.create({
-    model: modelId,
-    messages,
-    temperature: temperature ?? 1.0,
-    top_p: topP ?? 1.0,
-    ...(maxTokens ? { max_tokens: maxTokens } : {}),
-    ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-  });
-  const latencyMs = Date.now() - started;
+  const maxAttempts = 3;
+  let lastErr: unknown;
 
-  const content = completion.choices[0]?.message?.content ?? "";
-  const usage = completion.usage;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const started = Date.now();
+      const completion = await client.chat.completions.create({
+        model: modelId,
+        messages,
+        temperature: temperature ?? 1.0,
+        top_p: topP ?? 1.0,
+        ...(maxTokens ? { max_tokens: maxTokens } : {}),
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+      });
+      const latencyMs = Date.now() - started;
 
-  return {
-    content,
-    inputTokens: usage?.prompt_tokens ?? null,
-    outputTokens: usage?.completion_tokens ?? null,
-    latencyMs,
-    providerModelId: completion.model ?? null,
-  };
+      const content = completion.choices[0]?.message?.content ?? "";
+      const usage = completion.usage;
+
+      return {
+        content,
+        inputTokens: usage?.prompt_tokens ?? null,
+        outputTokens: usage?.completion_tokens ?? null,
+        latencyMs,
+        providerModelId: completion.model ?? null,
+      };
+    } catch (err) {
+      lastErr = err;
+      if (attempt === maxAttempts || !isRetriable(err)) throw err;
+      // Exponential backoff with jitter: 1s, 3s, then give up.
+      const delay = 1000 * Math.pow(3, attempt - 1) + Math.floor(Math.random() * 500);
+      await sleep(delay);
+    }
+  }
+
+  throw lastErr;
 }

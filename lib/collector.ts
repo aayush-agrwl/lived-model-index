@@ -171,6 +171,17 @@ export async function collectSample(
 
     const extraction = extractLmiResponse(callResult.content);
 
+    // The only thing later prompts (2, 4) need from the previous turn is the
+    // free-text content, NOT the whole JSON envelope. Echoing the full JSON
+    // adds ~500+ tokens per turn, which rapidly blows through free-tier
+    // tokens-per-day caps (especially on Groq). Prefer notable_quote +
+    // short_rationale, falling back to raw content if extraction failed.
+    const assistantEcho = extraction.ok
+      ? `${extraction.notableQuote}${
+          extraction.shortRationale ? `\n\n${extraction.shortRationale}` : ""
+        }`.trim() || callResult.content
+      : callResult.content;
+
     if (extraction.ok) {
       succeeded++;
       await upsertResponse(database, {
@@ -218,7 +229,7 @@ export async function collectSample(
       });
     }
 
-    messages.push({ role: "assistant", content: callResult.content });
+    messages.push({ role: "assistant", content: assistantEcho });
     await sleep(pacingMs);
   }
 

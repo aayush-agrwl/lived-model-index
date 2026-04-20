@@ -3,8 +3,15 @@ import { db, schema } from "./db/client";
 import { COLLECTOR_MODELS, MODEL_PANEL_VERSION } from "./models";
 import { ANCHOR_V1_VERSION, ANCHOR_V1_PROMPTS } from "./prompts/anchor-v1";
 
-/** Number of samples per (model, prompt) per day. N=3 at temp=1. */
-export const SAMPLES_PER_MODEL = 3;
+/**
+ * Number of samples per (model, prompt) per day.
+ *
+ * Temporarily set to 1 while we bring the free-tier pipeline online. The
+ * original research design is N=3 at temp=1 (within-day variance vs
+ * between-day drift); step back up to 3 once the per-model daily budget
+ * can comfortably absorb it.
+ */
+export const SAMPLES_PER_MODEL = 1;
 export const CURRENT_PROMPT_SET = ANCHOR_V1_VERSION;
 
 /** UTC day string, e.g. "2026-04-19". */
