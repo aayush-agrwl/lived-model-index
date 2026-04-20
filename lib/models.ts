@@ -86,15 +86,20 @@ export const COLLECTOR_MODELS: ModelEntry[] = [
     order: 50,
   },
   {
-    // Was `google/gemma-3-27b-it:free` — that route started returning ping
-    // failures on OpenRouter (either pulled from the free catalog or not
-    // honoring response_format: json_object). The 12B variant is still
-    // listed as free and keeps Gemma family coverage in the panel.
-    slug: "gemma-3-12b-openrouter",
-    displayName: "Gemma 3 12B (OpenRouter)",
+    // OpenRouter slot history:
+    //   - google/gemma-3-27b-it:free → ping failed (pulled from free catalog)
+    //   - google/gemma-3-12b-it:free → ping returned non-JSON despite
+    //     response_format:json_object. Gemma models on OpenRouter free
+    //     routes don't honor json_object mode reliably, which is
+    //     disqualifying for our JSON-only collection pipeline.
+    // Swapped to GLM 4.5 Air — a new organizational lineage (Z.AI /
+    // Zhipu) for better family diversity in the panel, and GLM honors
+    // OpenAI-compatible response_format.
+    slug: "glm-4_5-air-openrouter",
+    displayName: "GLM 4.5 Air (OpenRouter)",
     provider: "openrouter",
-    modelId: "google/gemma-3-12b-it:free",
-    family: "Gemma",
+    modelId: "z-ai/glm-4.5-air:free",
+    family: "GLM",
     order: 60,
   },
 ];

@@ -88,7 +88,36 @@ export async function GET(req: NextRequest) {
   }
 
   const all = [...COLLECTOR_MODELS, RATER_MODEL];
-  const results = await Promise.all(all.map(pingOne));
+
+  // Dedupe by (provider, modelId) before firing the calls. The rater
+  // model is intentionally the same underlying model as one of the
+  // collectors (Gemini 2.5 Flash), and pinging the same endpoint twice
+  // in parallel can trip per-minute rate limits — we've seen the second
+  // call come back "429 (no body)" while the first succeeds. One ping
+  // per distinct endpoint is enough; we fan the shared result back out
+  // to each slot so the UI still shows every configured row.
+  const pingKey = (m: ModelEntry) => `${m.provider}::${m.modelId}`;
+  const uniqueByKey = new Map<string, ModelEntry>();
+  for (const m of all) {
+    if (!uniqueByKey.has(pingKey(m))) uniqueByKey.set(pingKey(m), m);
+  }
+  const uniquePings = await Promise.all(
+    Array.from(uniqueByKey.values()).map(pingOne),
+  );
+  const resultByKey = new Map<string, PingResult>();
+  for (const p of uniquePings) {
+    resultByKey.set(`${p.provider}::${p.modelId}`, p);
+  }
+  const results: PingResult[] = all.map((m) => {
+    const shared = resultByKey.get(pingKey(m))!;
+    // Keep the shared ok/latency/error, but label the row with this
+    // slot's slug + display name so each configured row is visible.
+    return {
+      ...shared,
+      modelSlug: m.slug,
+      modelDisplayName: m.displayName,
+    };
+  });
 
   const total = results.length;
   const passed = results.filter((r) => r.ok).length;
