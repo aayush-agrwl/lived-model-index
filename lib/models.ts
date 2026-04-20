@@ -13,14 +13,20 @@
  *   - qwen/qwen-2.5-72b-instruct:free: removed from OpenRouter's free catalog.
  *   - Gemini 2.5 Pro: free-tier RPD (~25/day) too low to finish a sample.
  *
- * v2 drops those four and replaces them with currently-verified free
- * routes. It also adds two Llama lineages (3.3 and 4) and a distinct
- * OpenAI-open-weights entry (GPT-OSS) for better family diversity. Most
- * collectors are on Groq for speed; Groq's TPD limits are per-model, so
- * adding more models doesn't starve any single one.
+ * Panel v3 (2026-04-20): Google slot removed.
+ *   Both gemini-2.5-flash and gemini-2.0-flash returned "429 status code
+ *   (no body)" on every single call from Vercel serverless, even with 7s
+ *   pacing, 12s/24s backoff, the rater moved off Google, and a fresh
+ *   per-model RPD counter. The failure pattern (no body, first call, two
+ *   different models) rules out per-model quota and points at something
+ *   at the project / API-key / egress layer we can't resolve from here.
+ *   Rather than keep blocking the daily pipeline on a permanently-red
+ *   slot, we ship a 5-model panel and document the gap in methodology.
+ *   Google representation can be re-added later if a usable free route
+ *   emerges (or if the project graduates to paid Gemini).
  */
 
-export const MODEL_PANEL_VERSION = "panel_v2_free";
+export const MODEL_PANEL_VERSION = "panel_v3_free";
 
 export type Provider = "google" | "groq" | "openrouter";
 
@@ -45,24 +51,12 @@ export interface ModelEntry {
 }
 
 export const COLLECTOR_MODELS: ModelEntry[] = [
-  {
-    // Was gemini-2.5-flash. Every collector call returned "429 status
-    // code (no body)" for a full day across multiple pacing and
-    // backoff fixes, even after moving the rater off Google entirely.
-    // Root cause: cumulative RPD exhaustion. 2.5 Flash free tier is
-    // only 250 RPD, and between ping tests, panel_v1 attempts, the
-    // rater back when it was Gemini, and today's failed-then-retried
-    // collector calls, we burned the daily cap well before a clean
-    // sample could land. 2.0 Flash has ~1500 RPD and 15 RPM on the
-    // free tier — 6× the headroom and a separate per-model counter.
-    // Keeps Google family representation without abandoning the slot.
-    slug: "gemini-2_0-flash",
-    displayName: "Gemini 2.0 Flash",
-    provider: "google",
-    modelId: "gemini-2.0-flash",
-    family: "Gemini",
-    order: 10,
-  },
+  // `order: 10` intentionally skipped: that was the Google slot,
+  // removed in panel_v3. See the header comment for the failure
+  // analysis. Leaving the ordinal gap reserves visual real estate
+  // in the UI for whatever we put back here (Google paid, a
+  // different frontier lab, etc.) so the rest of the panel stays
+  // at its current display positions.
   {
     slug: "llama-3_3-70b-groq",
     displayName: "Llama 3.3 70B (Groq)",
