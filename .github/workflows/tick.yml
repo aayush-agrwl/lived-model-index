@@ -1,0 +1,28 @@
+name: LMI — Tick (drain the work queue)
+
+# Runs every 10 minutes between 01:00 and 06:00 UTC, draining the
+# collect+rate queue. Outside this window it's a no-op (tick returns
+# quickly when there's no work).
+#
+# Why this pattern: GitHub Actions free tier supports arbitrary cron
+# schedules, unlike Vercel Hobby Cron which is limited to once per day
+# per job. This workflow plus the /api/cron/tick endpoint gives us the
+# chunked processing we need to fit inside Vercel's 60s function limit.
+
+on:
+  schedule:
+    - cron: "*/10 1-6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /api/cron/tick
+        run: |
+          curl -fsSL -X POST "${SITE_URL}/api/cron/tick" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            --max-time 65
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ secrets.SITE_URL }}

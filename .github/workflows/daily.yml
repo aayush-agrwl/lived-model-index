@@ -1,0 +1,35 @@
+name: LMI — Daily Bootstrap
+
+# Runs once per day at 01:00 UTC. Creates today's runs and queues
+# response rows. Then immediately kicks off the first tick.
+#
+# Requires two repo-level secrets:
+#   - CRON_SECRET: same value as on Vercel
+#   - SITE_URL:    e.g. https://lived-model-index-<hash>.vercel.app
+
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /api/cron/daily
+        run: |
+          curl -fsSL -X POST "${SITE_URL}/api/cron/daily" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Content-Type: application/json" \
+            --max-time 60
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+      - name: Kick off first tick
+        run: |
+          curl -fsSL -X POST "${SITE_URL}/api/cron/tick" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            --max-time 65 || true
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ secrets.SITE_URL }}

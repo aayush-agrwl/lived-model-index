@@ -16,26 +16,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <a href="/" className="font-semibold tracking-tight text-lg">
               Lived Model Index
             </a>
-            <nav className="flex gap-6 text-sm text-[var(--muted)]">
+            <nav className="flex gap-5 text-sm text-[var(--muted)]">
               <a href="/" className="hover:text-[var(--foreground)]">
                 Dashboard
               </a>
+              <a href="/trends" className="hover:text-[var(--foreground)]">
+                Trends
+              </a>
+              <a href="/responses" className="hover:text-[var(--foreground)]">
+                Responses
+              </a>
+              <a href="/health" className="hover:text-[var(--foreground)]">
+                Health
+              </a>
               <a href="/methodology" className="hover:text-[var(--foreground)]">
                 Methodology
-              </a>
-              <a
-                href="https://github.com/"
-                target="_blank"
-                rel="noreferrer"
-                className="hover:text-[var(--foreground)]"
-              >
-                Source
               </a>
             </nav>
           </header>
           <main>{children}</main>
           <footer className="mt-16 border-t border-[var(--border)] pt-4 text-xs text-[var(--muted)]">
-            Lived Model Index · automated since launch.
+            Lived Model Index · automated since launch · Anchor Set v1 · Panel v1 (free tier).
           </footer>
         </div>
       </body>
