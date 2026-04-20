@@ -111,6 +111,34 @@ export async function collectSample(
     );
   }
 
+  // 2a. Load any already-collected rows for this (run, sampleIndex) so
+  // we can skip the API call for them on a resumed tick. A 10-prompt
+  // sample can exceed Vercel's 60s Hobby cap with a slow model — the
+  // first tick does N prompts, times out, and without resumability the
+  // next tick re-asks from prompt 1, burning tokens and never making
+  // forward progress. We treat a row as "already done" if its raw_json
+  // is non-null (includes extraction-failed and API-error rows), so
+  // the tick is guaranteed to move on instead of looping.
+  const existingRows = await database
+    .select({
+      promptId: schema.responses.promptId,
+      rawText: schema.responses.rawText,
+      rawJson: schema.responses.rawJson,
+      notableQuote: schema.responses.notableQuote,
+      shortRationale: schema.responses.shortRationale,
+    })
+    .from(schema.responses)
+    .where(
+      and(
+        eq(schema.responses.runId, runId),
+        eq(schema.responses.sampleIndex, sampleIndex),
+      ),
+    );
+  const alreadyDone = new Map<string, (typeof existingRows)[number]>();
+  for (const row of existingRows) {
+    if (row.rawJson !== null) alreadyDone.set(row.promptId, row);
+  }
+
   // 3. Build conversation incrementally.
   const systemPrompt =
     `You are participating in a research study called the Lived Model Index. You will be asked a sequence of questions about your own processing, preferences, and tentative "feelings." ` +
@@ -140,6 +168,23 @@ export async function collectSample(
       `Question:\n${prompt.text}`;
 
     messages.push({ role: "user", content: userTurn });
+
+    // Resume-fast path: if this prompt already has a committed row,
+    // reconstruct the assistant echo from its extracted fields and
+    // skip the API call entirely. This preserves conversational
+    // continuity for prompts 2/4 that reference the previous answer
+    // while keeping the tick within its time budget.
+    const done = alreadyDone.get(prompt.promptId);
+    if (done) {
+      const echo =
+        [done.notableQuote, done.shortRationale]
+          .filter((s): s is string => !!s && s.length > 0)
+          .join("\n\n") ||
+        done.rawText ||
+        "<previous turn>";
+      messages.push({ role: "assistant", content: echo });
+      continue;
+    }
 
     attempted++;
     let callResult: Awaited<ReturnType<typeof chatCall>>;

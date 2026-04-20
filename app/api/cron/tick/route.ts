@@ -22,9 +22,16 @@ import { todayStatus } from "@/lib/orchestration";
  */
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// 300s is the Pro-plan ceiling; on Hobby Vercel silently caps this at
+// 60s, so setting 300 here is harmless for either plan. Combined with
+// the collector's resumability, even a slow sample now completes in
+// one tick on Pro, or within 2 ticks on Hobby without re-asking.
+export const maxDuration = 300;
 
-const TIME_BUDGET_MS = 50_000; // reserve ~10s of headroom
+// Headroom under the 300s Pro ceiling; on Hobby the function is killed
+// at 60s before Phase 2's loop has a chance to observe this value, so
+// this gate is effectively a Pro-only budget.
+const TIME_BUDGET_MS = 280_000;
 
 export async function POST(req: NextRequest) {
   if (!isAuthorizedCron(req) && !isAuthorizedAdmin()) {
