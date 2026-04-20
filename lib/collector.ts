@@ -4,6 +4,26 @@ import { chatCall } from "./providers";
 import { extractLmiResponse } from "./score-extraction";
 import { SCHEMA_INSTRUCTION } from "./schema";
 import { findCollector } from "./models";
+import type { Provider } from "./models";
+
+/**
+ * Per-provider floor on per-call pacing. Providers have different
+ * per-minute rate limits on their free tiers, and our collector
+ * issues 10 calls in quick succession for a single sample.
+ *
+ *   - Google Gemini free: 10 RPM → one call per 6s floor. We pad to
+ *     7s to avoid spiking right at the edge. Without this, the first
+ *     sample lands the RPM window saturated and every subsequent
+ *     call 429s for the remainder of the minute.
+ *   - Groq free: generous RPM, the binding constraint is TPD. Keep
+ *     pacing fast.
+ *   - OpenRouter free: variable by route, modest pacing is safe.
+ */
+const PROVIDER_MIN_PACING_MS: Record<Provider, number> = {
+  google: 7_000,
+  groq: 500,
+  openrouter: 1_000,
+};
 
 /**
  * Collector: runs the full 10-prompt anchor battery as a single
@@ -71,7 +91,6 @@ export async function collectSample(
   sampleIndex: number,
   deps: CollectorDeps = {},
 ): Promise<CollectSampleResult> {
-  const pacingMs = deps.pacingMs ?? 500;
   const database = db();
   const started = Date.now();
 
@@ -89,6 +108,12 @@ export async function collectSample(
     throw new Error(
       `Model slug ${runRow.modelSlug} not in current panel (lib/models.ts).`,
     );
+
+  // Resolve pacing: explicit deps value wins, otherwise use the
+  // provider-specific floor. Google in particular needs ≥6s between
+  // calls or the free-tier RPM window stays saturated on every call
+  // after the first.
+  const pacingMs = deps.pacingMs ?? PROVIDER_MIN_PACING_MS[collector.provider] ?? 500;
 
   // Mark run as running if not already.
   if (runRow.status === "pending") {

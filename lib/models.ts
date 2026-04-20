@@ -108,18 +108,27 @@ export const COLLECTOR_MODELS: ModelEntry[] = [
  * The dedicated rater model. Kept fixed so inter-rater reliability
  * measurements are comparable over time.
  *
- * Rater lives on Google's quota (RPD-limited) rather than on Groq's
- * TPD-limited hot path so collection and rating can't starve each
- * other. Rating is a short, low-temperature JSON-only job — Gemini
- * Flash is strong enough for it and its RPD cap (~250/day) comfortably
- * absorbs ~60 rater calls/day (6 collectors × 10 prompts × 1 sample).
+ * Rater history:
+ *   - v1: Llama 3.3 70B on Groq. Moved off because it shared TPD with
+ *     the collector slot of the same model.
+ *   - v2: Gemini 2.5 Flash on Google. Moved off because the rater's
+ *     50+ calls/day saturated Google's 10 RPM window, which meant the
+ *     Gemini 2.5 Flash *collector* slot 429'd on every call.
+ *   - v3 (current): Llama 3.1 8B Instant on Groq. Not a collector,
+ *     so no shared TPD contention. Small, fast, cheap — plenty for
+ *     the short JSON-only rating task. Separate Groq per-model
+ *     budget from any collector.
+ *
+ * Swapping the rater changes inter-rater reliability baselines over
+ * time — acceptable during bring-up, will be frozen once the pipeline
+ * is producing a clean day's data end-to-end.
  */
 export const RATER_MODEL: ModelEntry = {
-  slug: "rater-gemini-2_5-flash",
-  displayName: "Gemini 2.5 Flash (rater)",
-  provider: "google",
-  modelId: "gemini-2.5-flash",
-  family: "Gemini",
+  slug: "rater-llama-3_1-8b-groq",
+  displayName: "Llama 3.1 8B Instant (rater)",
+  provider: "groq",
+  modelId: "llama-3.1-8b-instant",
+  family: "Llama 3",
   order: 999,
 };
 

@@ -138,8 +138,16 @@ export async function chatCall(params: ChatCallParams): Promise<ChatCallResult> 
     } catch (err) {
       lastErr = err;
       if (attempt === maxAttempts || !isRetriable(err)) throw err;
-      // Exponential backoff with jitter: 1s, 3s, then give up.
-      const delay = 1000 * Math.pow(3, attempt - 1) + Math.floor(Math.random() * 500);
+      // Backoff sized to the failure type. 429s against Google free
+      // tier need close to a full 60s window to clear — a 1s/3s
+      // backoff effectively guaranteed a second and third failure.
+      // 5xx / transient network errors clear much faster so we keep
+      // those quick.
+      const msg = err instanceof Error ? err.message : String(err ?? "");
+      const is429 = /\b429\b/.test(msg);
+      const baseMs = is429 ? 12_000 : 1_000;
+      const delay =
+        baseMs * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 500);
       await sleep(delay);
     }
   }
