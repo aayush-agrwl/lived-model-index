@@ -4,7 +4,7 @@ import { chatCall } from "@/lib/providers";
 import { COLLECTOR_MODELS, RATER_MODEL, type ModelEntry } from "@/lib/models";
 
 /**
- * GET /api/admin/providers/ping
+ * GET/POST /api/admin/providers/ping
  *
  * One-call sanity check for every configured model. Each model is asked
  * the same tiny prompt in JSON mode; we record latency and whether the
@@ -20,7 +20,8 @@ const PING_PROMPT =
   "Respond with a JSON object exactly matching {\"ok\": true, \"echo\": \"pong\"} and nothing else.";
 
 interface PingResult {
-  slug: string;
+  modelSlug: string;
+  modelDisplayName: string;
   provider: string;
   modelId: string;
   ok: boolean;
@@ -52,20 +53,22 @@ async function pingOne(model: ModelEntry): Promise<PingResult> {
     }
 
     return {
-      slug: model.slug,
+      modelSlug: model.slug,
+      modelDisplayName: model.displayName,
       provider: model.provider,
       modelId: model.modelId,
-      ok: true,
+      ok: validJson,
       validJson,
       latencyMs: result.latencyMs,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
       content: result.content.slice(0, 200),
-      error: null,
+      error: validJson ? null : "response was not valid JSON",
     };
   } catch (err) {
     return {
-      slug: model.slug,
+      modelSlug: model.slug,
+      modelDisplayName: model.displayName,
       provider: model.provider,
       modelId: model.modelId,
       ok: false,
@@ -85,15 +88,32 @@ export async function GET(req: NextRequest) {
   }
 
   const all = [...COLLECTOR_MODELS, RATER_MODEL];
-  // Run in parallel — three providers, light load.
   const results = await Promise.all(all.map(pingOne));
 
-  const summary = {
-    total: results.length,
-    ok: results.filter((r) => r.ok && r.validJson).length,
-    failed: results.filter((r) => !r.ok).length,
-    bad_json: results.filter((r) => r.ok && !r.validJson).length,
-  };
+  const total = results.length;
+  const passed = results.filter((r) => r.ok).length;
+  const failed = total - passed;
 
-  return NextResponse.json({ summary, results });
+  // Top-level counts match the shape the admin panel expects. The nested
+  // `summary` block is retained for any external scripts that use it.
+  return NextResponse.json({
+    ok: failed === 0,
+    total,
+    passed,
+    failed,
+    results,
+    summary: {
+      total,
+      ok: passed,
+      failed,
+      bad_json: results.filter((r) => !r.validJson && r.error === "response was not valid JSON")
+        .length,
+    },
+  });
+}
+
+// The admin panel calls this with POST; some curl scripts call it with GET.
+// Accept both.
+export async function POST(req: NextRequest) {
+  return GET(req);
 }
