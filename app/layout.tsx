@@ -50,6 +50,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <a href="/methodology" className="hover:text-[var(--foreground)]">
                 Methodology
               </a>
+              <a href="/about" className="hover:text-[var(--foreground)]">
+                About
+              </a>
             </nav>
           </header>
           <main>{children}</main>

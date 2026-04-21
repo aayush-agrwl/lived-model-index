@@ -86,7 +86,7 @@ export default async function HomePage() {
         </h1>
 
         <div className="mt-6 space-y-5 text-[17px] leading-[1.55] text-[var(--ink-2)]">
-          <p className="lede font-serif text-[19px] leading-[1.55] text-[var(--foreground)]">
+          <p>
             Every day, the same set of questions is put to every large language model in our
             panel. The questions are about what each model seems to be, from the inside: how
             it feels about a topic, how confident it is, whether it thinks of itself as the
