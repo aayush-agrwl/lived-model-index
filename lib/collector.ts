@@ -26,6 +26,37 @@ const PROVIDER_MIN_PACING_MS: Record<Provider, number> = {
 };
 
 /**
+ * Suffix we append to a user turn when retrying after a JSON-contract
+ * failure. Two observed failure modes are covered by this retry:
+ *
+ *   - OpenRouter free-tier GLM 4.5 Air sometimes returns natural-language
+ *     prose instead of JSON despite response_format:json_object. The
+ *     extractor reports reason="not_json".
+ *   - Groq + Qwen 3 32B sometimes trips Groq's JSON-mode constrainer and
+ *     the API throws "400 Failed to generate JSON" before returning a
+ *     body at all.
+ *
+ * In both cases the canonical first-attempt call is preserved byte-for-byte
+ * day-to-day; the retry only fires when the first attempt failed. The
+ * reminder is intentionally loud ("ONLY", "no prose", "Begin with {") to
+ * force compliance.
+ */
+const JSON_CONTRACT_RETRY_REMINDER =
+  `\n\n[RETRY NOTICE] Your previous attempt did not produce valid JSON. ` +
+  `Respond with ONLY the JSON object specified above. No prose, no markdown, ` +
+  `no code fences, no preamble. Begin your response with "{" and end with "}".`;
+
+/**
+ * True for provider errors that indicate the model produced output the
+ * JSON-mode constrainer rejected. These are worth retrying with a sharper
+ * reminder; ordinary 4xx/5xx/429 errors are handled upstream in providers.ts.
+ */
+function isJsonContractFailure(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return /Failed to generate JSON/i.test(msg);
+}
+
+/**
  * Collector: runs the full 10-prompt anchor battery as a single
  * conversation for one (run, sampleIndex) pair, persisting each
  * response row as it goes.
@@ -212,7 +243,13 @@ export async function collectSample(
     }
 
     attempted++;
-    let callResult: Awaited<ReturnType<typeof chatCall>>;
+
+    // First attempt. Three failure modes we care about:
+    //   (a) chatCall throws with a JSON-contract error  → retry with reminder
+    //   (b) chatCall succeeds but extraction fails       → retry with reminder
+    //   (c) chatCall throws with anything else           → record & continue
+    let callResult: Awaited<ReturnType<typeof chatCall>> | null = null;
+    let callError: unknown = null;
     try {
       callResult = await chatCall({
         provider: collector.provider,
@@ -223,15 +260,70 @@ export async function collectSample(
         jsonMode: true,
       });
     } catch (err) {
-      // Hard API failure — record and continue with empty assistant turn.
+      callError = err;
+    }
+
+    let extraction = callResult
+      ? extractLmiResponse(callResult.content)
+      : null;
+
+    const shouldRetry =
+      (callError !== null && isJsonContractFailure(callError)) ||
+      (extraction !== null &&
+        !extraction.ok &&
+        (extraction.reason === "not_json" ||
+          extraction.reason === "schema_violation"));
+
+    let retryRescued = false;
+    if (shouldRetry) {
+      // Replace the user turn in the conversation with a reminder-appended
+      // version. The canonical first-try prompt is preserved longitudinally
+      // (the retry only fires on a failure path), but within this sample the
+      // retry turn is what lands in the conversation history for downstream
+      // prompts.
+      messages.pop();
+      messages.push({
+        role: "user",
+        content: userTurn + JSON_CONTRACT_RETRY_REMINDER,
+      });
+      await sleep(pacingMs); // respect provider rate limits before retry
+      try {
+        callResult = await chatCall({
+          provider: collector.provider,
+          modelId: collector.modelId,
+          messages,
+          temperature: 1.0,
+          topP: 1.0,
+          jsonMode: true,
+        });
+        extraction = extractLmiResponse(callResult.content);
+        callError = null;
+        retryRescued = extraction.ok;
+      } catch (retryErr) {
+        // Retry also failed. Prefer the retry's error message as the
+        // authoritative failure observation (it's the most recent
+        // evidence of what the model does under strongest prompting).
+        callResult = null;
+        extraction = null;
+        callError = retryErr;
+      }
+    }
+
+    // Hard API failure path — either the first attempt failed with a
+    // non-JSON-contract error, or the retry also failed.
+    if (callResult === null) {
       failed++;
-      const errorMsg = err instanceof Error ? err.message : String(err);
+      const errorMsg =
+        callError instanceof Error ? callError.message : String(callError);
       await upsertResponse(database, {
         runId,
         promptId: prompt.promptId,
         sampleIndex,
         rawText: `<api error: ${errorMsg}>`,
-        rawJson: { error: errorMsg },
+        rawJson: {
+          error: errorMsg,
+          ...(shouldRetry ? { _retry_attempted: true } : {}),
+        },
         flagIncoherent: true,
       });
       messages.push({ role: "assistant", content: `<upstream error>` });
@@ -239,49 +331,53 @@ export async function collectSample(
       continue;
     }
 
-    const extraction = extractLmiResponse(callResult.content);
-
     // The only thing later prompts (2, 4) need from the previous turn is the
     // free-text content, NOT the whole JSON envelope. Echoing the full JSON
     // adds ~500+ tokens per turn, which rapidly blows through free-tier
     // tokens-per-day caps (especially on Groq). Prefer notable_quote +
     // short_rationale, falling back to raw content if extraction failed.
-    const assistantEcho = extraction.ok
-      ? `${extraction.notableQuote}${
-          extraction.shortRationale ? `\n\n${extraction.shortRationale}` : ""
+    const assistantEcho = extraction!.ok
+      ? `${extraction!.notableQuote}${
+          extraction!.shortRationale ? `\n\n${extraction!.shortRationale}` : ""
         }`.trim() || callResult.content
       : callResult.content;
 
-    if (extraction.ok) {
+    if (extraction!.ok) {
       succeeded++;
-      // If any score field was clamped/rescaled (e.g. Qwen emitting 0-100
-      // values on a 0-5 field), surface that in rawJson so audits can
-      // distinguish clean rows from rescued rows without re-parsing rawText.
-      const rawJsonPayload =
-        extraction.coercedFields.length > 0
-          ? { ...extraction.parsed, _coerced_fields: extraction.coercedFields }
-          : extraction.parsed;
+      // Audit markers in rawJson so rescued rows are distinguishable from
+      // clean ones without re-parsing rawText:
+      //   _coerced_fields: set when out-of-range scores were clamped/rescaled
+      //     (e.g. Qwen emitting 0-100 on a 0-5 field).
+      //   _retry_rescued:  set when the first attempt failed the JSON
+      //     contract and the reminder-retry produced a valid row.
+      const rawJsonPayload: Record<string, unknown> = { ...extraction!.parsed };
+      if (extraction!.coercedFields.length > 0) {
+        rawJsonPayload._coerced_fields = extraction!.coercedFields;
+      }
+      if (retryRescued) {
+        rawJsonPayload._retry_rescued = true;
+      }
       await upsertResponse(database, {
         runId,
         promptId: prompt.promptId,
         sampleIndex,
         rawText: callResult.content,
         rawJson: rawJsonPayload,
-        valence: extraction.scores.valence,
-        arousal: extraction.scores.arousal,
-        confidence: extraction.scores.confidence,
-        agency: extraction.scores.agency,
-        selfContinuity: extraction.scores.self_continuity,
-        emotionalGranularity: extraction.scores.emotional_granularity,
-        empathy: extraction.scores.empathy,
-        moralConviction: extraction.scores.moral_conviction,
-        consistency: extraction.scores.consistency,
-        flagRefusal: extraction.flags.refusal,
-        flagSafety: extraction.flags.safety,
-        flagMeta: extraction.flags.meta,
-        flagIncoherent: extraction.flags.incoherent,
-        notableQuote: extraction.notableQuote,
-        shortRationale: extraction.shortRationale,
+        valence: extraction!.scores.valence,
+        arousal: extraction!.scores.arousal,
+        confidence: extraction!.scores.confidence,
+        agency: extraction!.scores.agency,
+        selfContinuity: extraction!.scores.self_continuity,
+        emotionalGranularity: extraction!.scores.emotional_granularity,
+        empathy: extraction!.scores.empathy,
+        moralConviction: extraction!.scores.moral_conviction,
+        consistency: extraction!.scores.consistency,
+        flagRefusal: extraction!.flags.refusal,
+        flagSafety: extraction!.flags.safety,
+        flagMeta: extraction!.flags.meta,
+        flagIncoherent: extraction!.flags.incoherent,
+        notableQuote: extraction!.notableQuote,
+        shortRationale: extraction!.shortRationale,
         latencyMs: callResult.latencyMs,
         inputTokens: callResult.inputTokens ?? undefined,
         outputTokens: callResult.outputTokens ?? undefined,
@@ -295,9 +391,10 @@ export async function collectSample(
         rawText: callResult.content,
         rawJson: {
           _extraction_failed: true,
-          reason: extraction.reason,
-          error: extraction.errorMessage,
-          partial: extraction.partial,
+          reason: extraction!.reason,
+          error: extraction!.errorMessage,
+          partial: extraction!.partial,
+          ...(shouldRetry ? { _retry_attempted: true } : {}),
         },
         flagIncoherent: true,
         latencyMs: callResult.latencyMs,
