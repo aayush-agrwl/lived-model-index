@@ -6,7 +6,6 @@ export default function AboutPage() {
   return (
     <div className="mx-auto max-w-[680px] space-y-6">
       <section>
-        <div className="kicker mb-3">About</div>
         <h1 className="font-serif text-[40px] font-medium leading-[1.05] tracking-tight text-[var(--foreground)]">
           About the Lived Model Index
         </h1>

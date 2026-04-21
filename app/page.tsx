@@ -114,8 +114,9 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Main content column — KPIs + cards */}
-      <div className="mt-10 space-y-0">
+      {/* Main content column — KPIs + cards. Large space-y so the three
+          blocks read as clearly separated sections, not a single stack. */}
+      <div className="mt-14 space-y-28">
         {dbError ? (
           <section className="rounded-sm border border-[var(--border)] p-5">
             <h2 className="label-caps">Status</h2>

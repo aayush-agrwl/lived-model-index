@@ -158,7 +158,7 @@ export default function PromptChart({ points }: { points: PromptPoint[] }) {
   const hasData = chartData.length > 0 && models.length > 0;
 
   return (
-    <section className="my-20 rounded-sm border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm sm:p-7">
+    <section className="rounded-sm border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm sm:p-7">
       <h2 className="font-serif text-[22px] font-medium tracking-tight text-[var(--foreground)]">
         Per-prompt response over time
       </h2>
