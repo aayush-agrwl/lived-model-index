@@ -7,22 +7,18 @@ let heroSvg = "";
 try {
   heroSvg = readFileSync(path.join(process.cwd(), "public", "hero.svg"), "utf8");
 } catch {
-  // Fallback to an <img> reference if the file isn't reachable at build time
-  // (e.g. some edge sandbox variants). The public/ file will still be served.
   heroSvg = "";
 }
 
 export default function HeroSvg() {
   return (
-    <div
-      className="pixel-art relative w-full overflow-hidden rounded-sm border border-[var(--rule)] bg-[#120a2a]"
-      style={{ aspectRatio: "1600 / 560" }}
-      aria-label="A synthwave pixel-art landscape with a banded sun setting behind stepped mountains, a purple starfield, and two small figures silhouetted on a ridge in the foreground."
-      role="img"
+    <figure
+      className="pixel-art relative w-full overflow-hidden border-y border-[var(--rule)] bg-[#120a2a]"
+      aria-label="A synthwave-styled forest clearing at dusk with five figures around a fire, under a banded setting sun and a starfield."
     >
       {heroSvg ? (
         <div
-          className="absolute inset-0 h-full w-full"
+          className="block h-auto max-h-[62vh] w-full [&>svg]:block [&>svg]:h-auto [&>svg]:max-h-[62vh] [&>svg]:w-full"
           dangerouslySetInnerHTML={{ __html: heroSvg }}
         />
       ) : (
@@ -30,10 +26,12 @@ export default function HeroSvg() {
         <img
           src="/hero.svg"
           alt=""
-          className="absolute inset-0 h-full w-full"
+          className="block h-auto max-h-[62vh] w-full"
         />
       )}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[var(--background)] to-transparent h-16" />
-    </div>
+      <figcaption className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-sm bg-[rgba(250,246,238,0.78)] px-3 py-1 font-serif text-[13px] italic text-[rgba(20,24,18,0.72)]">
+        Five models around a fire — a standing record.
+      </figcaption>
+    </figure>
   );
 }

@@ -214,6 +214,7 @@ export async function subscaleRadar(days = 7) {
       emotionalGranularity: sql<number>`AVG(${schema.responses.emotionalGranularity})`,
       empathy: sql<number>`AVG(${schema.responses.empathy})`,
       moralConviction: sql<number>`AVG(${schema.responses.moralConviction})`,
+      consistency: sql<number>`AVG(${schema.responses.consistency})`,
       n: sql<number>`count(*)::int`,
     })
     .from(schema.responses)

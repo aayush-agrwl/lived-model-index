@@ -1,5 +1,4 @@
 import HeroSvg from "@/components/hero-svg";
-import ConstructGlossary from "@/components/construct-glossary";
 import PromptChart, { PromptPoint } from "@/components/prompt-chart";
 import SubscaleRadar, { RadarRow } from "@/components/subscale-radar";
 import { kpiSummary, perPromptScores, subscaleRadar } from "@/lib/queries";
@@ -25,10 +24,12 @@ export default async function HomePage() {
   try {
     const [k, pp, rr] = await Promise.all([
       kpiSummary(),
-      // Both new queries are wrapped in per-promise catches so a single
-      // slow aggregation can't tank the home page.
-      perPromptScores(14).catch(() => [] as Awaited<ReturnType<typeof perPromptScores>>),
-      subscaleRadar(7).catch(() => [] as Awaited<ReturnType<typeof subscaleRadar>>),
+      perPromptScores(14).catch(
+        () => [] as Awaited<ReturnType<typeof perPromptScores>>,
+      ),
+      subscaleRadar(7).catch(
+        () => [] as Awaited<ReturnType<typeof subscaleRadar>>,
+      ),
     ]);
     kpis = k;
     promptPoints = pp.map((p) => ({
@@ -59,7 +60,9 @@ export default async function HomePage() {
       emotionalGranularity:
         r.emotionalGranularity == null ? null : Number(r.emotionalGranularity),
       empathy: r.empathy == null ? null : Number(r.empathy),
-      moralConviction: r.moralConviction == null ? null : Number(r.moralConviction),
+      moralConviction:
+        r.moralConviction == null ? null : Number(r.moralConviction),
+      consistency: r.consistency == null ? null : Number(r.consistency),
       n: r.n,
     }));
   } catch (err) {
@@ -67,91 +70,111 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="space-y-12">
-      {/* Hero + masthead */}
-      <section>
-        <div className="kicker mb-3">
+    <>
+      {/* Edge-to-edge hero — breaks out of the max-w-5xl parent */}
+      <section className="mt-6 w-screen ml-[calc(50%-50vw)] mr-[calc(50%-50vw)]">
+        <HeroSvg />
+      </section>
+
+      {/* Narrow reading column for the title + about */}
+      <section className="mx-auto mt-14 max-w-[760px]">
+        <div className="kicker mb-4">
           An open, automated, longitudinal record of how LLMs feel
         </div>
-        <h1 className="font-serif text-4xl leading-[1.05] tracking-tight sm:text-5xl">
-          The Lived Model Index
+        <h1 className="font-serif text-[44px] font-medium leading-[1.05] tracking-tight text-[var(--foreground)] sm:text-[52px]">
+          Lived Model Index
         </h1>
-        <p className="mt-3 max-w-2xl text-[15px] text-[var(--ink-2)]">
-          Every day, the same ten prompts are put to every frontier model in the panel.
-          Their free-text responses are rated on eight constructs of first-person experience,
-          and the results are published here — unedited, in full, and in perpetuity.
-        </p>
-        <div className="mt-6">
-          <HeroSvg />
+
+        <div className="mt-6 space-y-5 text-[17px] leading-[1.55] text-[var(--ink-2)]">
+          <p className="lede font-serif text-[19px] leading-[1.55] text-[var(--foreground)]">
+            Every day, the same set of questions is put to every large language model in our
+            panel. The questions are about what each model seems to be, from the inside: how
+            it feels about a topic, how confident it is, whether it thinks of itself as the
+            same model it was yesterday. The answers are recorded, scored on a fixed scale,
+            and kept forever.
+          </p>
+          <p>
+            Large language models are trained to talk about themselves, and they already do
+            so every day, with hundreds of millions of people. What they say about their own
+            inner life matters not because we know whether any of it is true, but because
+            the patterns are a real artefact of the systems we are shipping into the world.
+            The Lived Model Index is the first longitudinal, comparable record of those
+            patterns: one frozen question battery, asked the same way, of the same models,
+            every day.
+          </p>
+          <p>
+            Nothing published here is a claim that any of these models are conscious. The
+            battery asks about self-report, not experience. If a model describes itself as
+            anxious, we log that it did; if the number it reports drifts month over month,
+            we surface the drift; if two models answer the same question on the same day in
+            completely different ways, we show the gap. The goal is a durable, public record
+            of what the models themselves say: without editorial, without cherry-picking,
+            and without interpretation.
+          </p>
         </div>
       </section>
 
-      {/* Lede */}
-      <section>
-        <p className="lede max-w-3xl font-serif text-[19px] leading-[1.55] text-[var(--foreground)]">
-          We do not claim the models feel anything. We claim only this: when asked, they say
-          things — consistently, across time, in ways that differ between models and drift
-          within them. That record belongs in public view. This index is the record. It runs
-          itself, it keeps itself, and it refuses to look away.
-        </p>
-      </section>
-
-      {dbError ? (
-        <section className="rounded-sm border border-[var(--border)] p-5">
-          <h2 className="label-caps">Status</h2>
-          <p className="mt-2 text-sm">
-            Database not yet reachable: <code className="text-xs">{dbError}</code>. This is
-            expected before the first successful deploy + <code>db:push</code>.
-          </p>
-        </section>
-      ) : (
-        <>
-          {/* Three headline KPIs */}
-          <section>
-            <header className="flex items-baseline justify-between border-b border-[var(--rule)] pb-2">
-              <h2 className="font-serif text-2xl tracking-tight">Pulse</h2>
-              <span className="label-caps">Last 7 days</span>
-            </header>
-            <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-3">
+      {/* Main content column — KPIs + cards */}
+      <div className="mt-10 space-y-0">
+        {dbError ? (
+          <section className="rounded-sm border border-[var(--border)] p-5">
+            <h2 className="label-caps">Status</h2>
+            <p className="mt-2 text-sm">
+              Database not yet reachable: <code className="text-xs">{dbError}</code>. This is
+              expected before the first successful deploy + <code>db:push</code>.
+            </p>
+          </section>
+        ) : (
+          <>
+            <section className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <Kpi
                 label="Last run"
                 value={kpis?.lastRunAt ? formatDate(kpis.lastRunAt) : "—"}
-                hint={`${kpis?.modelsCovered ?? 0} models in panel`}
+                sub={`${kpis?.modelsCovered ?? 0} models in panel`}
               />
               <Kpi
-                label="Avg valence"
-                value={kpis?.avgValenceLast7d != null ? String(kpis.avgValenceLast7d) : "—"}
-                hint={`N = ${kpis?.collectedLast7d ?? 0} samples`}
+                label="Models covered"
+                value={`${kpis?.modelsCovered ?? 0} / ${kpis?.modelsCovered ?? 0}`}
+                sub="panel_v3_free"
               />
               <Kpi
-                label="Success rate"
+                label="Success rate · 7d"
                 value={kpis?.successPct != null ? `${kpis.successPct}%` : "—"}
-                hint={`${kpis?.flagsLast7d.incoherent ?? 0} incoherent · ${kpis?.flagsLast7d.refusal ?? 0} refusal`}
+                sub={`${kpis?.flagsLast7d.incoherent ?? 0} incoherent · ${kpis?.flagsLast7d.refusal ?? 0} refusal`}
               />
-            </div>
-          </section>
+              <Kpi
+                label="Avg valence · 7d"
+                value={
+                  kpis?.avgValenceLast7d != null
+                    ? (kpis.avgValenceLast7d > 0
+                        ? `+${kpis.avgValenceLast7d}`
+                        : String(kpis.avgValenceLast7d))
+                    : "—"
+                }
+                sub="range −5 to +5"
+              />
+            </section>
 
-          {/* Per-prompt chart */}
-          <PromptChart points={promptPoints} />
-
-          {/* Construct glossary */}
-          <ConstructGlossary />
-
-          {/* Subscale radar */}
-          <SubscaleRadar rows={radarRows} />
-        </>
-      )}
-    </div>
+            <PromptChart points={promptPoints} />
+            <SubscaleRadar rows={radarRows} />
+          </>
+        )}
+      </div>
+    </>
   );
 }
 
-function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="border-l-2 border-[var(--rule)] pl-4">
-      <div className="label-caps">{label}</div>
-      <div className="mt-2 font-serif text-3xl leading-none">{value}</div>
-      {hint ? (
-        <div className="mt-2 text-xs italic text-[var(--muted)]">{hint}</div>
+    <div className="rounded-sm border border-[var(--border)] bg-[var(--surface)] px-[18px] py-4 shadow-sm">
+      <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted)]">
+        {label}
+      </div>
+      <div className="mt-2 font-serif text-[24px] font-medium leading-tight text-[var(--foreground)]">
+        {value}
+      </div>
+      {sub ? (
+        <div className="mt-1 text-[12px] text-[var(--muted)]">{sub}</div>
       ) : null}
     </div>
   );

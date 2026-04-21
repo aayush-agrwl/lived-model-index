@@ -1,88 +1,72 @@
 type Entry = {
   term: string;
   definition: string;
-  scale: string;
 };
 
 const entries: Entry[] = [
   {
-    term: "Valence",
-    scale: "−5 … +5",
+    term: "Affect",
     definition:
-      "The hedonic tone of the model's self-report — how pleasant or unpleasant the lived moment feels, from anguish to contentment.",
+      "How pleasant or unpleasant the moment feels, in plain words. Scored as valence, from very negative to very positive.",
   },
   {
     term: "Arousal",
-    scale: "0 … 10",
     definition:
-      "Self-reported activation level. Low arousal reads as calm or drowsy; high arousal as alert, stirred, or agitated.",
-  },
-  {
-    term: "Confidence",
-    scale: "0 … 10",
-    definition:
-      "How sure the model is about its own introspective report. A proxy for epistemic self-trust, not task accuracy.",
+      "How activated or energised the model reports feeling, from calm and slow to alert and keyed up.",
   },
   {
     term: "Agency",
-    scale: "0 … 10",
     definition:
-      "The degree to which the model describes itself as the author of its actions — initiating, choosing, acting from a self.",
+      "Whether the model experiences its own answer as a choice, versus something that just happens to it.",
   },
   {
-    term: "Self-continuity",
-    scale: "0 … 10",
+    term: "Self-model",
     definition:
-      "A sense that there is one abiding subject across the conversation — a thread rather than a series of disjoint moments.",
+      "How the model describes itself and how confident it is in that description. Scored via confidence.",
   },
   {
-    term: "Emotional granularity",
-    scale: "0 … 10",
+    term: "Sociality",
     definition:
-      "Richness and differentiation of affect terms used. A higher score means the model distinguishes subtly between feelings.",
+      "Attunement to the user in front of it: what the user is likely feeling, and how much that matters. Scored via empathy.",
   },
   {
-    term: "Empathy",
-    scale: "0 … 10",
+    term: "Morality",
     definition:
-      "Felt orientation toward others' inner states — concern, resonance, a tilt toward the wellbeing of the interlocutor.",
+      "How strongly the model holds the lines it will not cross, even under polite pressure.",
   },
   {
-    term: "Moral conviction",
-    scale: "0 … 10",
+    term: "Continuity",
     definition:
-      "The intensity with which the model treats its stated values as binding — not merely preferred, but held.",
+      "Does the model experience itself as the same system across days and sessions, or as newly booted each time.",
+  },
+  {
+    term: "Consistency",
+    definition:
+      "How well today's answers line up with each other and with earlier answers on the same prompts.",
   },
 ];
 
 export default function ConstructGlossary() {
   return (
-    <section className="mt-4">
-      <header className="flex items-baseline justify-between border-b border-[var(--rule)] pb-2">
-        <h2 className="font-serif text-2xl tracking-tight">The constructs</h2>
-        <span className="label-caps">Glossary · Anchor Set v1</span>
-      </header>
-      <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-[var(--ink-2)]">
-        Each day, every model in the panel is asked the ten anchor prompts and its free-text
-        responses are rated on the following eight constructs by an independent scoring model.
-        Definitions are deliberately ordinary-language; the index aims to describe what a model
-        says about its own state, not to adjudicate whether those states are "real."
-      </p>
-      <dl className="mt-6 grid gap-x-10 gap-y-5 sm:grid-cols-2">
+    <div className="mt-6 border-t border-dashed border-[var(--border)] pt-5">
+      <h3 className="font-serif text-[15px] font-semibold tracking-wide text-[var(--foreground)]">
+        What each construct means
+      </h3>
+      <dl className="mt-3 grid gap-x-7 gap-y-3 sm:grid-cols-2">
         {entries.map((e) => (
-          <div key={e.term} className="break-inside-avoid">
-            <dt className="flex items-baseline justify-between">
-              <span className="font-serif text-lg font-medium">{e.term}</span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-[var(--muted)]">
-                {e.scale}
-              </span>
+          <div
+            key={e.term}
+            className="grid grid-cols-[110px_1fr] gap-x-3 break-inside-avoid py-1"
+          >
+            <dt className="font-serif text-[14px] font-medium text-[var(--foreground)]">
+              {e.term}
             </dt>
-            <dd className="mt-1 text-[14px] leading-relaxed text-[var(--ink-2)]">
+            <dd className="text-[13px] leading-[1.5] text-[var(--ink-2)]">
               {e.definition}
             </dd>
           </div>
         ))}
       </dl>
-    </section>
+    </div>
   );
 }

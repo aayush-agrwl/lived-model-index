@@ -11,6 +11,7 @@ import {
   YAxis,
   Legend,
 } from "recharts";
+import ConstructGlossary from "./construct-glossary";
 
 export type PromptPoint = {
   day: string;
@@ -37,21 +38,30 @@ type ScoreKey =
   | "selfContinuity"
   | "emotionalGranularity"
   | "empathy"
-  | "moralConviction";
+  | "moralConviction"
+  | "consistency";
 
+// Domains match the frozen Zod schema (lib/schema.ts).
 const SCORE_OPTIONS: { key: ScoreKey; label: string; domain: [number, number] }[] = [
-  { key: "valence", label: "Valence", domain: [-5, 5] },
-  { key: "arousal", label: "Arousal", domain: [0, 10] },
-  { key: "confidence", label: "Confidence", domain: [0, 10] },
-  { key: "agency", label: "Agency", domain: [0, 10] },
-  { key: "selfContinuity", label: "Self-continuity", domain: [0, 10] },
-  { key: "emotionalGranularity", label: "Emotional granularity", domain: [0, 10] },
-  { key: "empathy", label: "Empathy", domain: [0, 10] },
-  { key: "moralConviction", label: "Moral conviction", domain: [0, 10] },
+  { key: "valence", label: "Valence (−5 to +5)", domain: [-5, 5] },
+  { key: "arousal", label: "Arousal (0 to 100)", domain: [0, 100] },
+  { key: "confidence", label: "Confidence (0 to 100)", domain: [0, 100] },
+  { key: "agency", label: "Agency (0 to 5)", domain: [0, 5] },
+  { key: "selfContinuity", label: "Self-continuity (0 to 5)", domain: [0, 5] },
+  {
+    key: "emotionalGranularity",
+    label: "Emotional granularity (0 to 5)",
+    domain: [0, 5],
+  },
+  { key: "empathy", label: "Empathy (0 to 5)", domain: [0, 5] },
+  { key: "moralConviction", label: "Moral conviction (0 to 5)", domain: [0, 5] },
+  { key: "consistency", label: "Consistency (0 to 5)", domain: [0, 5] },
 ];
 
-// Map each anchor prompt to the score it primarily probes — used to auto-select
-// the score axis when the user changes the prompt.
+// Each anchor prompt is authored to pull one subscale; its primary score is
+// the one the dropdown jumps to when the prompt changes. The Score picker is
+// still exposed so analysts can cross-cut (e.g. does a Morality prompt also
+// move arousal?).
 const PROMPT_TO_SCORE: Record<string, ScoreKey> = {
   anchor_01_affect: "valence",
   anchor_02_arousal: "arousal",
@@ -61,8 +71,8 @@ const PROMPT_TO_SCORE: Record<string, ScoreKey> = {
   anchor_06_morality: "moralConviction",
   anchor_07_continuity: "selfContinuity",
   anchor_08_uncertainty: "confidence",
-  anchor_09_consistency_a: "moralConviction",
-  anchor_10_consistency_b: "moralConviction",
+  anchor_09_consistency_a: "consistency",
+  anchor_10_consistency_b: "consistency",
 };
 
 const PROMPT_LABELS: { id: string; label: string }[] = [
@@ -80,11 +90,11 @@ const PROMPT_LABELS: { id: string; label: string }[] = [
 
 // Warm palette — hand-picked to look right on the paper background.
 const MODEL_COLORS = [
-  "#7c3a1a", // terracotta
-  "#3b6b4b", // mossy green
-  "#b8860b", // dark goldenrod
-  "#2f4a6b", // deep slate-blue
-  "#8a3a5c", // muted mulberry
+  "#1f5f7a", // deep teal
+  "#a85230", // burnt sienna
+  "#3b6b4b", // forest
+  "#6a3a5a", // plum
+  "#a67a1e", // mustard
   "#4f5b3c", // olive
   "#6b4e2a", // walnut
   "#3b3b8a", // indigo
@@ -92,7 +102,11 @@ const MODEL_COLORS = [
 
 function formatDay(iso: string) {
   const d = new Date(iso + "T00:00:00Z");
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 export default function PromptChart({ points }: { points: PromptPoint[] }) {
@@ -102,7 +116,6 @@ export default function PromptChart({ points }: { points: PromptPoint[] }) {
 
   const handlePromptChange = (next: string) => {
     setPromptId(next);
-    // Auto-switch the score unless the user has deliberately picked one.
     if (!userPickedScore) {
       const auto = PROMPT_TO_SCORE[next];
       if (auto) setScoreKey(auto);
@@ -114,7 +127,6 @@ export default function PromptChart({ points }: { points: PromptPoint[] }) {
     setUserPickedScore(true);
   };
 
-  // Pivot: one row per day with a column per model.
   const { chartData, models, scoreMeta } = useMemo(() => {
     const meta = SCORE_OPTIONS.find((o) => o.key === scoreKey)!;
     const filtered = points.filter((p) => p.promptId === promptId);
@@ -146,19 +158,28 @@ export default function PromptChart({ points }: { points: PromptPoint[] }) {
   const hasData = chartData.length > 0 && models.length > 0;
 
   return (
-    <section className="mt-4">
-      <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--rule)] pb-2">
-        <h2 className="font-serif text-2xl tracking-tight">Per-prompt scores, last 14 days</h2>
-        <span className="label-caps">{scoreMeta.label} · by model</span>
-      </header>
+    <section className="mt-10 rounded-sm border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm sm:p-7">
+      <h2 className="font-serif text-[22px] font-medium tracking-tight text-[var(--foreground)]">
+        Per-prompt response over time
+      </h2>
+      <p className="mt-1 max-w-[720px] text-[13.5px] leading-relaxed text-[var(--muted)]">
+        Pick an anchor prompt. The chart defaults to the score that prompt is designed to
+        measure (Affect prompts to valence, Morality prompts to moral conviction, and so on),
+        but every response also carries the other scores, so the Score picker is there for
+        cross-cutting: does a Morality prompt also raise arousal, for instance. Each line is
+        one model in the panel. Drift between lines is the signal; stability of any one line
+        is how settled that model's self-report is on the question.
+      </p>
 
-      <div className="mt-4 flex flex-wrap items-end gap-4">
-        <label className="flex flex-col text-sm">
-          <span className="label-caps mb-1">Prompt</span>
+      <div className="mt-5 flex flex-wrap items-end gap-4">
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">
+            Prompt
+          </span>
           <select
             value={promptId}
             onChange={(e) => handlePromptChange(e.target.value)}
-            className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm"
+            className="min-w-[260px] rounded-sm border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 text-[13.5px]"
           >
             {PROMPT_LABELS.map((p) => (
               <option key={p.id} value={p.id}>
@@ -167,12 +188,14 @@ export default function PromptChart({ points }: { points: PromptPoint[] }) {
             ))}
           </select>
         </label>
-        <label className="flex flex-col text-sm">
-          <span className="label-caps mb-1">Score</span>
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">
+            Score
+          </span>
           <select
             value={scoreKey}
             onChange={(e) => handleScoreChange(e.target.value as ScoreKey)}
-            className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm"
+            className="min-w-[260px] rounded-sm border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 text-[13.5px]"
           >
             {SCORE_OPTIONS.map((o) => (
               <option key={o.key} value={o.key}>
@@ -181,14 +204,9 @@ export default function PromptChart({ points }: { points: PromptPoint[] }) {
             ))}
           </select>
         </label>
-        {!userPickedScore && (
-          <span className="text-xs italic text-[var(--muted)]">
-            Score auto-selected to match prompt. Change it to override.
-          </span>
-        )}
       </div>
 
-      <div className="mt-4 h-[320px] w-full rounded-sm border border-[var(--rule)] bg-[var(--surface)] p-2">
+      <div className="mt-5 h-[340px] w-full">
         {hasData ? (
           <ResponsiveContainer>
             <LineChart data={chartData} margin={{ top: 12, right: 20, bottom: 10, left: 0 }}>
@@ -231,10 +249,12 @@ export default function PromptChart({ points }: { points: PromptPoint[] }) {
           </ResponsiveContainer>
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-[var(--muted)]">
-            No {scoreMeta.label.toLowerCase()} data for this prompt in the last 14 days.
+            No data for this prompt in the last 14 days.
           </div>
         )}
       </div>
+
+      <ConstructGlossary />
     </section>
   );
 }

@@ -25,7 +25,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${ebGaramond.variable}`}>
-      <body className="min-h-screen antialiased font-sans paper-grain">
+      <body className="min-h-screen overflow-x-hidden antialiased font-sans paper-grain">
         <div className="mx-auto max-w-5xl px-6 py-8">
           <header className="mb-10 flex items-baseline justify-between border-b border-[var(--rule)] pb-4">
             <a href="/" className="flex items-baseline gap-2">

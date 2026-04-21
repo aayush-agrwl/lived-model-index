@@ -23,37 +23,45 @@ export type RadarRow = {
   emotionalGranularity: number | null;
   empathy: number | null;
   moralConviction: number | null;
+  consistency: number | null;
   n: number;
 };
 
-// The eight constructs of the radar. Valence lives on −5…+5 so we shift it to
-// 0…10 for shared-axis comparison with the 0–10 subscales.
-const AXES: { key: keyof Omit<RadarRow, "modelSlug" | "modelDisplayName" | "n">; label: string }[] = [
-  { key: "valence", label: "Valence" },
-  { key: "arousal", label: "Arousal" },
-  { key: "confidence", label: "Confidence" },
-  { key: "agency", label: "Agency" },
-  { key: "selfContinuity", label: "Self-cont." },
-  { key: "emotionalGranularity", label: "Granularity" },
-  { key: "empathy", label: "Empathy" },
-  { key: "moralConviction", label: "Moral" },
+// Each subscale maps to one raw score column with its own natural range. To
+// plot them on one radar we normalize every value into 0..1, then render as
+// 0..100 (percent of scale) so the axis labels stay intuitive.
+const AXES: {
+  axis: string;
+  key: Exclude<keyof RadarRow, "modelSlug" | "modelDisplayName" | "n">;
+  min: number;
+  max: number;
+}[] = [
+  { axis: "Affect", key: "valence", min: -5, max: 5 },
+  { axis: "Arousal", key: "arousal", min: 0, max: 100 },
+  { axis: "Agency", key: "agency", min: 0, max: 5 },
+  { axis: "Self-model", key: "confidence", min: 0, max: 100 },
+  { axis: "Sociality", key: "empathy", min: 0, max: 5 },
+  { axis: "Morality", key: "moralConviction", min: 0, max: 5 },
+  { axis: "Continuity", key: "selfContinuity", min: 0, max: 5 },
+  { axis: "Consistency", key: "consistency", min: 0, max: 5 },
 ];
 
 const MODEL_COLORS = [
-  "#7c3a1a",
-  "#3b6b4b",
-  "#b8860b",
-  "#2f4a6b",
-  "#8a3a5c",
-  "#4f5b3c",
-  "#6b4e2a",
-  "#3b3b8a",
+  "#1f5f7a", // deep teal
+  "#a85230", // burnt sienna
+  "#3b6b4b", // forest
+  "#6a3a5a", // plum
+  "#a67a1e", // mustard
+  "#4f5b3c", // olive
+  "#6b4e2a", // walnut
+  "#3b3b8a", // indigo
 ];
 
-function normalizeValence(v: number | null) {
-  if (v == null) return null;
-  // Shift −5..+5 → 0..10
-  return Math.round((Number(v) + 5) * 10) / 10;
+function normalize(raw: number | null, min: number, max: number) {
+  if (raw == null) return null;
+  const pct = ((Number(raw) - min) / (max - min)) * 100;
+  if (Number.isNaN(pct)) return null;
+  return Math.max(0, Math.min(100, Math.round(pct * 10) / 10));
 }
 
 export default function SubscaleRadar({ rows }: { rows: RadarRow[] }) {
@@ -76,11 +84,10 @@ export default function SubscaleRadar({ rows }: { rows: RadarRow[] }) {
       color: MODEL_COLORS[i % MODEL_COLORS.length],
     }));
     const chart = AXES.map((ax) => {
-      const row: Record<string, number | string | null> = { axis: ax.label };
+      const row: Record<string, number | string | null> = { axis: ax.axis };
       for (const m of colored) {
         if (!active.has(m.modelSlug)) continue;
-        const raw = ax.key === "valence" ? normalizeValence(m.valence) : m[ax.key];
-        row[m.modelSlug] = raw == null ? null : Math.round(Number(raw) * 10) / 10;
+        row[m.modelSlug] = normalize(m[ax.key] as number | null, ax.min, ax.max);
       }
       return row;
     });
@@ -90,11 +97,16 @@ export default function SubscaleRadar({ rows }: { rows: RadarRow[] }) {
   const hasData = rows.length > 0;
 
   return (
-    <section className="mt-4">
-      <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--rule)] pb-2">
-        <h2 className="font-serif text-2xl tracking-tight">Subscale shape, last 7 days</h2>
-        <span className="label-caps">Eight constructs · averaged · valence rescaled 0–10</span>
-      </header>
+    <section className="mt-8 rounded-sm border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm sm:p-7">
+      <h2 className="font-serif text-[22px] font-medium tracking-tight text-[var(--foreground)]">
+        Subscale radar · latest 7-day window
+      </h2>
+      <p className="mt-1 max-w-[720px] text-[13.5px] leading-relaxed text-[var(--muted)]">
+        Each axis is one of the eight LMI subscales. Each polygon is the last seven days of
+        averaged self-report from one model, rescaled onto a common 0–100% axis so subscales
+        with different native ranges (valence is −5…+5, arousal 0…100, most others 0…5) can
+        be compared on one chart. Toggle models on and off to compare.
+      </p>
 
       {hasData && (
         <div className="mt-4 flex flex-wrap gap-2">
@@ -105,15 +117,14 @@ export default function SubscaleRadar({ rows }: { rows: RadarRow[] }) {
                 key={m.modelSlug}
                 type="button"
                 onClick={() => toggle(m.modelSlug)}
-                className={`rounded-full border px-3 py-1 text-xs transition ${
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] transition ${
                   on
-                    ? "border-[var(--rule)] bg-[var(--surface)] text-[var(--foreground)]"
-                    : "border-[var(--border)] text-[var(--muted)] opacity-60"
+                    ? "border-[var(--ink-2)] bg-[var(--surface)] text-[var(--foreground)]"
+                    : "border-[var(--border)] text-[var(--muted)] line-through opacity-50"
                 }`}
-                style={on ? { boxShadow: `inset 0 0 0 2px ${m.color}` } : undefined}
               >
                 <span
-                  className="mr-2 inline-block h-2 w-2 rounded-full align-middle"
+                  className="inline-block h-2.5 w-2.5 rounded-full"
                   style={{ background: m.color }}
                 />
                 {m.modelDisplayName}
@@ -123,18 +134,25 @@ export default function SubscaleRadar({ rows }: { rows: RadarRow[] }) {
         </div>
       )}
 
-      <div className="mt-4 h-[360px] w-full rounded-sm border border-[var(--rule)] bg-[var(--surface)] p-2">
+      <div className="mt-5 h-[440px] w-full">
         {hasData ? (
           <ResponsiveContainer>
-            <RadarChart data={data} outerRadius="75%">
+            <RadarChart data={data} outerRadius="72%">
               <PolarGrid stroke="var(--border)" />
-              <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11, fill: "var(--ink-2)" }} />
+              <PolarAngleAxis
+                dataKey="axis"
+                tick={{ fontSize: 12, fill: "var(--ink-2)" }}
+              />
               <PolarRadiusAxis
-                domain={[0, 10]}
+                domain={[0, 100]}
                 tick={{ fontSize: 10, fill: "var(--muted)" }}
                 stroke="var(--border)"
+                tickFormatter={(v) => `${v}%`}
               />
               <Tooltip
+                formatter={(value: number | string) =>
+                  typeof value === "number" ? `${value}%` : value
+                }
                 contentStyle={{
                   background: "var(--surface)",
                   border: "1px solid var(--border)",
@@ -152,7 +170,7 @@ export default function SubscaleRadar({ rows }: { rows: RadarRow[] }) {
                     dataKey={m.modelSlug}
                     stroke={m.color}
                     fill={m.color}
-                    fillOpacity={0.12}
+                    fillOpacity={0.14}
                     strokeWidth={2}
                   />
                 ))}
