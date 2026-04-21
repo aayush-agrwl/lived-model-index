@@ -3,26 +3,72 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #111111;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --accent: #111111;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #e7e7e7;
-    --muted: #9ca3af;
-    --border: #262626;
-    --accent: #e7e7e7;
-  }
+  --background: #faf6ee;
+  --surface: #ffffff;
+  --foreground: #1a1814;
+  --ink-2: #3a3428;
+  --muted: #6e6656;
+  --border: #e2dbc8;
+  --rule: #cfc5ae;
+  --accent: #7c3a1a;
+  --accent-green: #3b6b4b;
 }
 
 html,
 body {
   background: var(--background);
   color: var(--foreground);
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-serif {
+  font-family: var(--font-serif), "EB Garamond", ui-serif, Georgia, serif;
+  font-feature-settings: "kern", "liga", "dlig";
+}
+
+/* Pixel-art crispness for the hero SVG */
+.pixel-art {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+/* Subtle textured paper feel */
+.paper-grain {
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(124, 58, 26, 0.035) 0, transparent 40%),
+    radial-gradient(circle at 80% 80%, rgba(59, 107, 75, 0.03) 0, transparent 45%);
+}
+
+/* Kicker text */
+.kicker {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* Small-caps label */
+.label-caps {
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* Drop-cap for lede */
+.lede::first-letter {
+  font-family: var(--font-serif), "EB Garamond", ui-serif, Georgia, serif;
+  font-size: 3.2rem;
+  line-height: 0.9;
+  float: left;
+  padding-right: 0.5rem;
+  padding-top: 0.2rem;
+  color: var(--accent);
+  font-weight: 500;
 }

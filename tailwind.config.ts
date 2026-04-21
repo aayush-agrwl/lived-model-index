@@ -9,7 +9,25 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
+        sans: [
+          "var(--font-sans)",
+          "Inter",
+          "ui-sans-serif",
+          "system-ui",
+          "-apple-system",
+          "Segoe UI",
+          "Roboto",
+          "sans-serif",
+        ],
+        serif: [
+          "var(--font-serif)",
+          "EB Garamond",
+          "ui-serif",
+          "Georgia",
+          "Cambria",
+          "Times New Roman",
+          "serif",
+        ],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
     },

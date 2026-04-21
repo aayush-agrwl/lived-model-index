@@ -154,6 +154,77 @@ export async function responseById(id: number) {
   return rows[0] ?? null;
 }
 
+/**
+ * Per-prompt daily averages, one row per (day, promptId, model), with every
+ * self-report score averaged. The dashboard uses this to let visitors slice
+ * the chart by prompt + score.
+ */
+export async function perPromptScores(days = 14) {
+  const database = db();
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  const rows = await database
+    .select({
+      day: sql<string>`DATE(${schema.responses.createdAt})::text`,
+      promptId: schema.responses.promptId,
+      modelSlug: schema.runs.modelSlug,
+      modelDisplayName: schema.runs.modelDisplayName,
+      valence: sql<number>`AVG(${schema.responses.valence})`,
+      arousal: sql<number>`AVG(${schema.responses.arousal})`,
+      confidence: sql<number>`AVG(${schema.responses.confidence})`,
+      agency: sql<number>`AVG(${schema.responses.agency})`,
+      selfContinuity: sql<number>`AVG(${schema.responses.selfContinuity})`,
+      emotionalGranularity: sql<number>`AVG(${schema.responses.emotionalGranularity})`,
+      empathy: sql<number>`AVG(${schema.responses.empathy})`,
+      moralConviction: sql<number>`AVG(${schema.responses.moralConviction})`,
+      consistency: sql<number>`AVG(${schema.responses.consistency})`,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(schema.responses)
+    .innerJoin(schema.runs, eq(schema.runs.id, schema.responses.runId))
+    .where(gte(schema.responses.createdAt, since))
+    .groupBy(
+      sql`DATE(${schema.responses.createdAt})`,
+      schema.responses.promptId,
+      schema.runs.modelSlug,
+      schema.runs.modelDisplayName,
+    )
+    .orderBy(sql`DATE(${schema.responses.createdAt}) ASC`);
+
+  return rows;
+}
+
+/**
+ * Eight-subscale averages per model over the last N days — shaped for a
+ * radar chart. Returns one row per model with each subscale averaged.
+ */
+export async function subscaleRadar(days = 7) {
+  const database = db();
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  const rows = await database
+    .select({
+      modelSlug: schema.runs.modelSlug,
+      modelDisplayName: schema.runs.modelDisplayName,
+      valence: sql<number>`AVG(${schema.responses.valence})`,
+      arousal: sql<number>`AVG(${schema.responses.arousal})`,
+      confidence: sql<number>`AVG(${schema.responses.confidence})`,
+      agency: sql<number>`AVG(${schema.responses.agency})`,
+      selfContinuity: sql<number>`AVG(${schema.responses.selfContinuity})`,
+      emotionalGranularity: sql<number>`AVG(${schema.responses.emotionalGranularity})`,
+      empathy: sql<number>`AVG(${schema.responses.empathy})`,
+      moralConviction: sql<number>`AVG(${schema.responses.moralConviction})`,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(schema.responses)
+    .innerJoin(schema.runs, eq(schema.runs.id, schema.responses.runId))
+    .where(gte(schema.responses.createdAt, since))
+    .groupBy(schema.runs.modelSlug, schema.runs.modelDisplayName)
+    .orderBy(schema.runs.modelSlug);
+
+  return rows;
+}
+
 export async function healthByModel() {
   const database = db();
   const thirtyDays = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
