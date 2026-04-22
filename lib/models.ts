@@ -1,5 +1,5 @@
 /**
- * The pinned model panel for the Lived Model Index.
+ * The pinned model panel for the AI Mood Index.
  *
  * Each entry is version-locked to a specific model ID so that "drift" in
  * collected data reflects genuine changes in responses, not silent vendor

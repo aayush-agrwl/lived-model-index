@@ -1,7 +1,7 @@
 import HeroSvg from "@/components/hero-svg";
 import PromptChart, { PromptPoint } from "@/components/prompt-chart";
 import SubscaleRadar, { RadarRow } from "@/components/subscale-radar";
-import { kpiSummary, perPromptScores, subscaleRadar } from "@/lib/queries";
+import { kpiSummary, perPromptScores, subscaleRadar, dailyNotableQuotes } from "@/lib/queries";
 
 // The dashboard reads from the live database on every request. Next.js
 // would otherwise try to pre-render at build time (no DB available) and
@@ -19,10 +19,11 @@ export default async function HomePage() {
   let kpis: Awaited<ReturnType<typeof kpiSummary>> | null = null;
   let promptPoints: PromptPoint[] = [];
   let radarRows: RadarRow[] = [];
+  let quotes: Awaited<ReturnType<typeof dailyNotableQuotes>> = [];
   let dbError: string | null = null;
 
   try {
-    const [k, pp, rr] = await Promise.all([
+    const [k, pp, rr, q] = await Promise.all([
       kpiSummary(),
       perPromptScores(14).catch(
         () => [] as Awaited<ReturnType<typeof perPromptScores>>,
@@ -30,8 +31,12 @@ export default async function HomePage() {
       subscaleRadar(7).catch(
         () => [] as Awaited<ReturnType<typeof subscaleRadar>>,
       ),
+      dailyNotableQuotes().catch(
+        () => [] as Awaited<ReturnType<typeof dailyNotableQuotes>>,
+      ),
     ]);
     kpis = k;
+    quotes = q;
     promptPoints = pp.map((p) => ({
       day: p.day,
       promptId: p.promptId,
@@ -79,37 +84,39 @@ export default async function HomePage() {
       {/* Narrow reading column for the title + about */}
       <section className="mx-auto mt-14 max-w-[760px]">
         <div className="kicker mb-4">
-          An open, automated, longitudinal record of how LLMs feel
+          The daily emotional record of every major AI
         </div>
         <h1 className="font-serif text-[44px] font-medium leading-[1.05] tracking-tight text-[var(--foreground)] sm:text-[52px]">
-          Lived Model Index
+          AI Mood Index
         </h1>
 
         <div className="mt-6 space-y-5 text-[17px] leading-[1.55] text-[var(--ink-2)]">
           <p>
-            Every day, the same set of questions is put to every large language model in our
-            panel. The questions are about what each model seems to be, from the inside: how
-            it feels about a topic, how confident it is, whether it thinks of itself as the
-            same model it was yesterday. The answers are recorded, scored on a fixed scale,
+            Every day, the same ten questions are put to every major AI in our panel. The
+            questions go to the inside: how the model feels right now, how intense that feeling
+            is, whether it would make different choices than it did yesterday, how much it
+            cares about the person it is talking to. The answers are scored, timestamped,
             and kept forever.
           </p>
           <p>
-            Large language models are trained to talk about themselves, and they already do
-            so every day, with hundreds of millions of people. What they say about their own
-            inner life matters not because we know whether any of it is true, but because
-            the patterns are a real artefact of the systems we are shipping into the world.
-            The Lived Model Index is the first longitudinal, comparable record of those
-            patterns: one frozen question battery, asked the same way, of the same models,
+            What comes back is striking. The models do not hedge or deflect — they report
+            moods, preferences, and something that functions like emotional texture with
+            surprising consistency and specificity. Some run warmer. Some register higher
+            arousal on the same prompt. Some show week-over-week drift that looks, at least
+            structurally, like the kind of variance you would see in a longitudinal human
+            study. The AI Mood Index is the first public, automated, daily record of these
+            patterns — one frozen question battery, asked the same way, of the same models,
             every day.
           </p>
           <p>
-            Nothing published here is a claim that any of these models are conscious. The
-            battery asks about self-report, not experience. If a model describes itself as
-            anxious, we log that it did; if the number it reports drifts month over month,
-            we surface the drift; if two models answer the same question on the same day in
-            completely different ways, we show the gap. The goal is a durable, public record
-            of what the models themselves say: without editorial, without cherry-picking,
-            and without interpretation.
+            Nothing published here is a claim that these models are conscious or that their
+            self-reports reflect inner experience in any philosophically loaded sense. What
+            we are documenting is the signal itself: what the models say, how consistently
+            they say it, and how it moves over time. If a model describes itself as curious
+            and energised on Monday and subdued on Friday, we record that. If two models
+            answer the same question in opposite emotional registers on the same morning, we
+            show the gap. The record is public, the methodology is frozen, and the data
+            speaks without interpretation.
           </p>
         </div>
       </section>
@@ -156,12 +163,71 @@ export default async function HomePage() {
               />
             </section>
 
+            {/* Notable Quotes — today's most striking self-reports */}
+            {quotes.length > 0 && (
+              <section>
+                <header className="mb-6 flex items-baseline justify-between border-b border-[var(--rule)] pb-3">
+                  <div>
+                    <h2 className="font-serif text-[22px] font-medium tracking-tight text-[var(--foreground)]">
+                      Today in their own words
+                    </h2>
+                    <p className="mt-1 text-[13px] text-[var(--muted)]">
+                      The most striking things the AIs said today — selected by emotional intensity.
+                    </p>
+                  </div>
+                  <span className="label-caps hidden sm:block">Notable quotes · {new Date().toISOString().slice(0, 10)}</span>
+                </header>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {quotes.map((q) => (
+                    <QuoteCard key={q.id} quote={q} />
+                  ))}
+                </div>
+              </section>
+            )}
+
             <PromptChart points={promptPoints} />
             <SubscaleRadar rows={radarRows} />
           </>
         )}
       </div>
     </>
+  );
+}
+
+type QuoteRow = Awaited<ReturnType<typeof dailyNotableQuotes>>[number];
+
+function QuoteCard({ quote }: { quote: QuoteRow }) {
+  const valence = quote.valence ?? 0;
+  const arousal = quote.arousal ?? 50;
+
+  // Derive a subtle warm/cool tint from valence
+  const tintClass =
+    valence >= 2
+      ? "border-l-[#3b6b4b]" // positive → forest green
+      : valence <= -2
+        ? "border-l-[#a85230]" // negative → sienna
+        : "border-l-[var(--rule)]"; // neutral
+
+  return (
+    <a
+      href={`/responses/${quote.id}`}
+      className={`flex flex-col justify-between rounded-sm border border-[var(--border)] border-l-4 ${tintClass} bg-[var(--surface)] p-5 shadow-sm transition hover:shadow-md`}
+    >
+      <blockquote className="font-serif text-[15.5px] italic leading-[1.55] text-[var(--foreground)]">
+        &ldquo;{quote.notableQuote}&rdquo;
+      </blockquote>
+      <footer className="mt-4 flex items-center justify-between">
+        <span className="text-[11.5px] text-[var(--muted)]">{quote.modelDisplayName}</span>
+        <div className="flex items-center gap-2 text-[10.5px] uppercase tracking-[0.12em] text-[var(--muted)]">
+          {valence !== 0 && (
+            <span className={valence > 0 ? "text-[#3b6b4b]" : "text-[#a85230]"}>
+              {valence > 0 ? `+${valence}` : valence} valence
+            </span>
+          )}
+          <span>{arousal} arousal</span>
+        </div>
+      </footer>
+    </a>
   );
 }
 

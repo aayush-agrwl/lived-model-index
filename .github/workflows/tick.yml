@@ -1,4 +1,4 @@
-name: LMI — Tick (drain the work queue)
+name: AMI — Tick (drain the work queue)
 
 # Runs every 10 minutes between 01:00 and 06:00 UTC, draining the
 # collect+rate queue. Outside this window it's a no-op (tick returns
@@ -8,6 +8,12 @@ name: LMI — Tick (drain the work queue)
 # schedules, unlike Vercel Hobby Cron which is limited to once per day
 # per job. This workflow plus the /api/cron/tick endpoint gives us the
 # chunked processing we need to fit inside Vercel's 60s function limit.
+#
+# ⚠️  IMPORTANT — SITE_URL must equal your Vercel production URL, e.g.:
+#       https://ai-mood-index.vercel.app
+#     After any Vercel project rename or domain change, update the secret
+#     or every curl call will fail with "URL malformed" (exit code 3).
+#     Set it at: repo → Settings → Secrets and variables → Actions → SITE_URL
 
 on:
   schedule:
@@ -18,11 +24,34 @@ jobs:
   tick:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate secrets
+        run: |
+          if [ -z "${SITE_URL}" ]; then
+            echo "::error::SITE_URL secret is not set or is empty."
+            echo "::error::Go to repo → Settings → Secrets and variables → Actions and set SITE_URL to your Vercel production URL (e.g. https://ai-mood-index.vercel.app)."
+            exit 1
+          fi
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::CRON_SECRET secret is not set or is empty."
+            exit 1
+          fi
+          echo "SITE_URL is set (length ${#SITE_URL}). Calling: ${SITE_URL}/api/cron/tick"
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+
       - name: POST /api/cron/tick
         run: |
-          curl -fsSL -X POST "${SITE_URL}/api/cron/tick" \
+          HTTP_STATUS=$(curl -s -o /tmp/tick_body.json -w "%{http_code}" \
+            -X POST "${SITE_URL}/api/cron/tick" \
             -H "Authorization: Bearer ${CRON_SECRET}" \
-            --max-time 65
+            --max-time 70)
+          echo "HTTP status: ${HTTP_STATUS}"
+          cat /tmp/tick_body.json || true
+          if [ "${HTTP_STATUS}" -lt 200 ] || [ "${HTTP_STATUS}" -ge 300 ]; then
+            echo "::error::Tick endpoint returned HTTP ${HTTP_STATUS}"
+            exit 1
+          fi
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           SITE_URL: ${{ secrets.SITE_URL }}

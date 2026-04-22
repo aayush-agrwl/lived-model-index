@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Support the Index · Lived Model Index",
+  title: "Support the Index · AI Mood Index",
 };
 
 // UPI deep links — these open the respective app on Android devices that have
@@ -43,7 +43,7 @@ export default function SupportPage() {
 
       <section className="space-y-4 text-[17px] leading-[1.6] text-[var(--ink-2)]">
         <p>
-          The Lived Model Index is for the public, by the public. It lives outside
+          The AI Mood Index is for the public, by the public. It lives outside
           any paywall or login — free to read, free to cite, free to fork. The
           work that keeps it going, though, costs money: every day, the same
           battery is put to every model in the panel, and every answer is scored

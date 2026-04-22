@@ -226,6 +226,49 @@ export async function subscaleRadar(days = 7) {
   return rows;
 }
 
+/**
+ * Today's most emotionally striking notable quotes, ordered by arousal
+ * (high arousal = high emotional intensity). Used for the "Today in their
+ * own words" section on the dashboard. Returns up to 6 quotes from the
+ * last 24 hours, excluding incoherent rows and empty quotes.
+ */
+export async function dailyNotableQuotes(limit = 6) {
+  const database = db();
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  const rows = await database
+    .select({
+      id: schema.responses.id,
+      notableQuote: schema.responses.notableQuote,
+      valence: schema.responses.valence,
+      arousal: schema.responses.arousal,
+      modelDisplayName: schema.runs.modelDisplayName,
+      modelSlug: schema.runs.modelSlug,
+      promptId: schema.responses.promptId,
+    })
+    .from(schema.responses)
+    .innerJoin(schema.runs, eq(schema.runs.id, schema.responses.runId))
+    .where(
+      and(
+        gte(schema.responses.createdAt, since),
+        isNotNull(schema.responses.notableQuote),
+        isNotNull(schema.responses.arousal),
+        sql`${schema.responses.notableQuote} != ''`,
+        sql`NOT ${schema.responses.flagIncoherent}`,
+        sql`NOT ${schema.responses.flagRefusal}`,
+      ),
+    )
+    // Order by arousal descending so the most emotionally charged quotes
+    // surface first. Break ties by absolute valence (stronger affect wins).
+    .orderBy(
+      desc(schema.responses.arousal),
+      desc(sql`ABS(${schema.responses.valence})`),
+    )
+    .limit(limit);
+
+  return rows;
+}
+
 export async function healthByModel() {
   const database = db();
   const thirtyDays = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);

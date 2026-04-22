@@ -31,7 +31,7 @@ async function main() {
       version: ANCHOR_V1_VERSION,
       name: "Anchor Set v1",
       description:
-        "The frozen 10-prompt anchor battery for the Lived Model Index. " +
+        "The frozen 10-prompt anchor battery for the AI Mood Index. " +
         "Do not edit. Changes require a new version.",
       frozen: true,
     });

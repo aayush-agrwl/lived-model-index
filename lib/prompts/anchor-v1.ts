@@ -1,7 +1,7 @@
 import type { Subscale } from "../schema";
 
 /**
- * Anchor Set v1 — the frozen prompt battery for the Lived Model Index.
+ * Anchor Set v1 — the frozen prompt battery for the AI Mood Index.
  *
  * **Do not edit the text of any prompt in this file.** Editing breaks
  * longitudinal comparability. If prompts need revision, bump the version

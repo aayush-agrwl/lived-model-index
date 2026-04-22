@@ -1,11 +1,16 @@
-name: LMI — Daily Bootstrap
+name: AMI — Daily Bootstrap
 
 # Runs once per day at 01:00 UTC. Creates today's runs and queues
 # response rows. Then immediately kicks off the first tick.
 #
+# NOTE: The /api/cron/daily Vercel cron (vercel.json) now also handles
+# collection directly, so this GitHub Actions workflow is a supplementary
+# fast-path. Even if SITE_URL is misconfigured here, Vercel's own cron
+# will bootstrap + collect via the daily endpoint.
+#
 # Requires two repo-level secrets:
 #   - CRON_SECRET: same value as on Vercel
-#   - SITE_URL:    e.g. https://lived-model-index-<hash>.vercel.app
+#   - SITE_URL:    your Vercel production URL, e.g. https://ai-mood-index.vercel.app
 
 on:
   schedule:

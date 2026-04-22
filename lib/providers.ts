@@ -52,8 +52,8 @@ export function clientFor(provider: Provider): OpenAI {
     // OpenRouter recommends these identifying headers:
     ...(provider === "openrouter" && {
       defaultHeaders: {
-        "HTTP-Referer": "https://github.com/lived-model-index",
-        "X-Title": "Lived Model Index",
+        "HTTP-Referer": "https://github.com/ai-mood-index",
+        "X-Title": "AI Mood Index",
       },
     }),
   });

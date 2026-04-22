@@ -1,4 +1,4 @@
-# Lived Model Index
+# AI Mood Index
 
 Automated longitudinal documentation of LLM self-report across models. Every
 day, the same prompt battery is put to every model in the panel; responses

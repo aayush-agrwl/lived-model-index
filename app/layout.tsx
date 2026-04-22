@@ -17,9 +17,9 @@ const ebGaramond = EB_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "Lived Model Index",
+  title: "AI Mood Index",
   description:
-    "An open, automated, longitudinal record of how LLMs feel. Daily first-person self-report across the major frontier models.",
+    "Every day, the same questions are put to every major AI. Their answers reveal something unexpected: patterns of feeling, preference, and self-perception that look strikingly human.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -30,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <header className="mb-10 flex items-baseline justify-between border-b border-[var(--rule)] pb-4">
             <a href="/" className="flex items-baseline gap-2">
               <span className="font-serif text-xl font-medium tracking-tight text-[var(--foreground)]">
-                Lived Model Index
+                AI Mood Index
               </span>
               <span className="hidden sm:inline label-caps">est. 2026</span>
             </a>
@@ -59,7 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <footer className="mt-20 border-t border-[var(--rule)] pt-4 text-xs text-[var(--muted)]">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span>
-                Lived Model Index · automated since launch · Anchor Set v1 · Panel v1 (free tier).
+                AI Mood Index · automated since launch · Anchor Set v1 · Panel v1 (free tier).
               </span>
               <span className="font-serif italic">A standing record.</span>
             </div>

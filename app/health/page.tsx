@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata = {
-  title: "Health · Lived Model Index",
+  title: "Health · AI Mood Index",
 };
 
 function pct(num: number | null | undefined, denom: number | null | undefined) {

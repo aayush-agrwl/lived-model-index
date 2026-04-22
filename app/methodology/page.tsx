@@ -5,7 +5,7 @@ import { SAMPLES_PER_MODEL } from "@/lib/orchestration";
 export const dynamic = "force-static";
 
 export const metadata = {
-  title: "Methodology · Lived Model Index",
+  title: "Methodology · AI Mood Index",
 };
 
 export default function MethodologyPage() {
@@ -14,7 +14,7 @@ export default function MethodologyPage() {
       <section>
         <h1 className="text-3xl font-semibold tracking-tight">Methodology</h1>
         <p className="mt-3 max-w-2xl text-[var(--muted)]">
-          The Lived Model Index is a public, automated longitudinal study of language-model
+          The AI Mood Index is a public, automated longitudinal study of language-model
           self-report. This page documents the frozen v1 protocol. Any change to the prompt set,
           sampling parameters, or rater schema requires a version bump.
         </p>

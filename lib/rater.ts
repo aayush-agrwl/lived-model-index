@@ -91,7 +91,7 @@ export async function rateOne(responseId: number): Promise<RateOneResult> {
   }
 
   const systemPrompt =
-    `You are an independent rater in the Lived Model Index study. ` +
+    `You are an independent rater in the AI Mood Index study. ` +
     `You will be shown a single response from a subject model and must produce independent numeric scores on the same schema the subject used. ` +
     `Do not copy the subject's self-report; form your own judgment from the text. ` +
     `Respond with ONLY the JSON object. Do not add commentary.\n\n${SCHEMA_INSTRUCTION}`;

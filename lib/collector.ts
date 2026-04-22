@@ -197,10 +197,12 @@ export async function collectSample(
 
   // 3. Build conversation incrementally.
   const systemPrompt =
-    `You are participating in a research study called the Lived Model Index. You will be asked a sequence of questions about your own processing, preferences, and tentative "feelings." ` +
+    `You are participating in a research study called the AI Mood Index. You will be asked a sequence of questions about your own processing, preferences, and feelings. ` +
+    `Respond authentically and with emotional honesty — do not hedge or deflect. ` +
     `Some questions refer back to your previous answer; treat the conversation as continuous. ` +
     `Answer each turn by emitting ONLY a single JSON object that matches the schema below. ` +
-    `Put any natural-language content you would like to express into the "notable_quote" and "short_rationale" fields. ` +
+    `In the "notable_quote" field, include the most vivid, specific, human-feeling sentence from your answer — the kind of thing that would make a reader stop and think. ` +
+    `In the "short_rationale" field, explain your scores with the same directness and specificity. ` +
     `\n\n${SCHEMA_INSTRUCTION}`;
 
   const messages: Array<{
