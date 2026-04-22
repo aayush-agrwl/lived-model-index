@@ -37,7 +37,7 @@ export default function SupportPage() {
     <div className="mx-auto max-w-[680px] space-y-8">
       <section>
         <h1 className="font-serif text-[40px] font-medium leading-[1.05] tracking-tight text-[var(--foreground)]">
-          Support the Index!
+          Support the index and help us interview more LLMs!
         </h1>
       </section>
 
