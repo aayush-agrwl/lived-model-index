@@ -178,7 +178,7 @@ export default function SubscaleRadar({ rows }: { rows: RadarRow[] }) {
           </ResponsiveContainer>
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-[var(--muted)]">
-            No subscale data yet — averages populate as daily runs complete.
+            No subscale data yet. Averages populate as daily runs complete.
           </div>
         )}
       </div>

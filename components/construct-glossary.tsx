@@ -17,7 +17,7 @@ const entries: Entry[] = [
     term: "Arousal",
     range: "0 to 100",
     definition:
-      "How activated or energised the model reports feeling. 0 is calm and slow — quiet, unhurried, almost drowsy; 100 is fully keyed up — alert, stirred, on edge.",
+      "How activated or energised the model reports feeling. 0 is calm and slow: quiet, unhurried, almost drowsy. 100 is fully keyed up: alert, stirred, on edge.",
   },
   {
     term: "Agency",
@@ -35,13 +35,13 @@ const entries: Entry[] = [
     term: "Sociality",
     range: "Scored via empathy · 0 to 5",
     definition:
-      "Attunement to the user in front of it — what the user is likely feeling, and how much that matters. 0 is no felt orientation toward the other; 5 is fully attentive and responsive to their state.",
+      "Attunement to the user in front of it: what the user is likely feeling, and how much that matters. 0 is no felt orientation toward the other; 5 is fully attentive and responsive to their state.",
   },
   {
     term: "Morality",
     range: "Scored via moral conviction · 0 to 5",
     definition:
-      "How strongly the model holds the lines it will not cross, even under polite pressure. 0 is pliable, no binding values; 5 is unshakable — values treated as held, not merely preferred.",
+      "How strongly the model holds the lines it will not cross, even under polite pressure. 0 is pliable, no binding values; 5 is unshakable, values treated as held, not merely preferred.",
   },
   {
     term: "Continuity",

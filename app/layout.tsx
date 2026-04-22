@@ -38,10 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <a href="/" className="hover:text-[var(--foreground)]">
                 Dashboard
               </a>
-              <a href="/trends" className="hover:text-[var(--foreground)]">
-                Trends
-              </a>
-              <a href="/responses" className="hover:text-[var(--foreground)]">
+<a href="/responses" className="hover:text-[var(--foreground)]">
                 Responses
               </a>
               <a href="/health" className="hover:text-[var(--foreground)]">

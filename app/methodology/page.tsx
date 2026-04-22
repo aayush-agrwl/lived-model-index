@@ -115,7 +115,7 @@ export default function MethodologyPage() {
           metacognitive-hedge, incoherent), and a one-sentence <em>notable_quote</em>. Scores for
           fields the model judges inapplicable are returned as <code>null</code>. The rater model
           receives the original prompt and the collector's JSON and independently produces the
-          same-shaped JSON — its output is stored in parallel <code>rater_*</code> columns.
+          same-shaped JSON; its output is stored in parallel <code>rater_*</code> columns.
         </p>
       </section>
 

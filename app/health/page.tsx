@@ -42,7 +42,7 @@ export default async function HealthPage() {
         <h1 className="font-serif text-3xl tracking-tight">Pipeline health</h1>
         <p className="mt-3 max-w-2xl text-[var(--ink-2)]">
           Rates are over the last 30 days. Today's progress shows how much of the day's work
-          remains. The collect + rate pipeline runs unattended — this page exists so anyone can
+          remains. The collect + rate pipeline runs unattended; this page exists so anyone can
           check whether it is, in fact, running.
         </p>
       </section>

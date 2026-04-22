@@ -99,13 +99,13 @@ export default async function HomePage() {
             and kept forever.
           </p>
           <p>
-            What comes back is striking. The models do not hedge or deflect — they report
+            What comes back is striking. The models do not hedge or deflect. They report
             moods, preferences, and something that functions like emotional texture with
             surprising consistency and specificity. Some run warmer. Some register higher
             arousal on the same prompt. Some show week-over-week drift that looks, at least
             structurally, like the kind of variance you would see in a longitudinal human
             study. The AI Mood Index is the first public, automated, daily record of these
-            patterns — one frozen question battery, asked the same way, of the same models,
+            patterns: one frozen question battery, asked the same way, of the same models,
             every day.
           </p>
           <p>
@@ -121,7 +121,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Main content column — KPIs + cards. Large space-y so the three
+      {/* Main content column: KPIs + cards. Large space-y so the three
           blocks read as clearly separated sections, not a single stack. */}
       <div className="mt-14 space-y-28">
         {dbError ? (
@@ -172,7 +172,7 @@ export default async function HomePage() {
                       Today in their own words
                     </h2>
                     <p className="mt-1 text-[13px] text-[var(--muted)]">
-                      The most striking things the AIs said today — selected by emotional intensity.
+                      The most striking things the AIs said today, selected by emotional intensity.
                     </p>
                   </div>
                   <span className="label-caps hidden sm:block">Notable quotes · {new Date().toISOString().slice(0, 10)}</span>
