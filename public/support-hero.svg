@@ -1,0 +1,662 @@
+<svg viewBox="0 0 320 120" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pixel art at dusk: five figures gathered around a campfire under a starlit sky. A backer counts coins, a patron feeds the fire, the tall cloaked Index holds a glowing staff, a friend warms hands, and a builder grips a hammer. An owl watches from a tree. Caption: Five strangers, one steady fire.">
+<defs>
+<style>
+  .smoke{animation:smokeRise 4s linear infinite;transform-box:fill-box;transform-origin:center}
+  .smoke-b{animation-delay:1s}
+  .smoke-c{animation-delay:2s}
+  .smoke-d{animation-delay:3s}
+  .flicker{animation:flicker .45s steps(2) infinite;transform-box:fill-box;transform-origin:center bottom}
+  .spark{animation:spark 2.2s linear infinite;transform-box:fill-box;transform-origin:center}
+  .spark-b{animation-delay:.7s}
+  .spark-c{animation-delay:1.5s}
+  .spark-d{animation-delay:1.1s}
+  .twinkle{animation:twinkle 3s ease-in-out infinite}
+  .twinkle-b{animation-delay:1.1s}
+  .twinkle-c{animation-delay:2.2s}
+  .twinkle-d{animation-delay:.5s}
+  .pulse{animation:pulse 2.4s ease-in-out infinite}
+  .pulse-b{animation-delay:1.2s}
+  .fly{animation:fly 2s ease-in-out infinite}
+  .fly-b{animation-delay:.7s}
+  .fly-c{animation-delay:1.4s}
+  .shoot{animation:shoot 9s ease-out infinite;animation-delay:4s}
+  @keyframes smokeRise{0%{transform:translate(0,0);opacity:0}15%{opacity:.7}100%{transform:translate(0,-30px);opacity:0}}
+  @keyframes flicker{0%{transform:scaleY(1)}50%{transform:scaleY(.88)}100%{transform:scaleY(1)}}
+  @keyframes spark{0%{transform:translate(0,0);opacity:1}100%{transform:translate(0,-18px);opacity:0}}
+  @keyframes twinkle{0%,100%{opacity:1}50%{opacity:.25}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+  @keyframes fly{0%,100%{opacity:.9}50%{opacity:.1}}
+  @keyframes shoot{0%{transform:translate(0,0);opacity:1}20%{opacity:1}35%{transform:translate(26px,13px);opacity:0}100%{transform:translate(26px,13px);opacity:0}}
+  @media (prefers-reduced-motion:reduce){.smoke,.flicker,.spark,.twinkle,.pulse,.fly,.shoot{animation:none}}
+</style>
+</defs>
+
+<!-- SKY BANDS -->
+<rect width="320" height="22" fill="#0d061f"/>
+<rect y="22" width="320" height="8" fill="#140a2b"/>
+<rect y="30" width="320" height="8" fill="#1f0e38"/>
+<rect y="38" width="320" height="7" fill="#2d1448"/>
+<rect y="45" width="320" height="6" fill="#421a55"/>
+<rect y="51" width="320" height="5" fill="#5c1e5a"/>
+<rect y="56" width="320" height="5" fill="#7a2660"/>
+<rect y="61" width="320" height="4" fill="#9c3060"/>
+<rect y="65" width="320" height="4" fill="#c04a5e"/>
+<rect y="69" width="320" height="3" fill="#d96650"/>
+
+<!-- AURORA HINTS -->
+<rect x="0" y="3" width="110" height="1" fill="#3a1f6b" opacity=".45"/>
+<rect x="70" y="5" width="80" height="1" fill="#2a3a6b" opacity=".35"/>
+<rect x="200" y="4" width="100" height="1" fill="#2a4a6b" opacity=".4"/>
+<rect x="250" y="2" width="70" height="1" fill="#3a1f6b" opacity=".3"/>
+
+<!-- CLOUDS -->
+<g fill="#4a1a55" opacity=".7">
+  <rect x="0" y="24" width="40" height="1"/>
+  <rect x="55" y="26" width="30" height="1"/>
+  <rect x="200" y="23" width="45" height="1"/>
+  <rect x="260" y="27" width="40" height="1"/>
+</g>
+<g fill="#7a2660" opacity=".6">
+  <rect x="20" y="32" width="50" height="1"/>
+  <rect x="240" y="34" width="55" height="1"/>
+</g>
+<g fill="#5c1e5a" opacity=".45">
+  <rect x="0" y="25" width="20" height="1"/>
+  <rect x="38" y="24" width="12" height="1"/>
+  <rect x="148" y="29" width="28" height="1"/>
+  <rect x="280" y="26" width="22" height="1"/>
+</g>
+<g fill="#8c2a68" opacity=".4">
+  <rect x="10" y="33" width="28" height="1"/>
+  <rect x="180" y="35" width="38" height="1"/>
+</g>
+
+<!-- CRESCENT MOON -->
+<g fill="#f2e8c4">
+  <rect x="35" y="11" width="7" height="1"/>
+  <rect x="33" y="12" width="10" height="1"/>
+  <rect x="32" y="13" width="11" height="1"/>
+  <rect x="32" y="14" width="11" height="1"/>
+  <rect x="33" y="15" width="10" height="1"/>
+  <rect x="34" y="16" width="8" height="1"/>
+</g>
+<g fill="#140a2b">
+  <rect x="36" y="12" width="6" height="1"/>
+  <rect x="35" y="13" width="7" height="1"/>
+  <rect x="35" y="14" width="7" height="1"/>
+  <rect x="36" y="15" width="5" height="1"/>
+  <rect x="37" y="16" width="3" height="1"/>
+</g>
+<g fill="#f2e8c4" opacity=".06">
+  <rect x="30" y="10" width="15" height="9"/>
+</g>
+
+<!-- STARS -->
+<g fill="#f2e8c4">
+  <rect x="14" y="4" width="1" height="1"/><rect x="22" y="8" width="1" height="1"/><rect x="58" y="5" width="1" height="1"/><rect x="72" y="11" width="1" height="1"/><rect x="90" y="6" width="1" height="1"/><rect x="106" y="14" width="1" height="1"/><rect x="118" y="8" width="1" height="1"/><rect x="48" y="22" width="1" height="1"/><rect x="96" y="24" width="1" height="1"/><rect x="10" y="18" width="1" height="1"/><rect x="225" y="5" width="1" height="1"/><rect x="238" y="12" width="1" height="1"/><rect x="250" y="7" width="1" height="1"/><rect x="275" y="9" width="1" height="1"/><rect x="288" y="5" width="1" height="1"/><rect x="312" y="7" width="1" height="1"/><rect x="252" y="19" width="1" height="1"/><rect x="300" y="18" width="1" height="1"/>
+  <rect x="130" y="6" width="1" height="1"/><rect x="145" y="12" width="1" height="1"/><rect x="170" y="4" width="1" height="1"/><rect x="185" y="9" width="1" height="1"/><rect x="210" y="6" width="1" height="1"/>
+  <rect x="6" y="10" width="1" height="1"/><rect x="315" y="14" width="1" height="1"/><rect x="75" y="3" width="1" height="1"/><rect x="265" y="3" width="1" height="1"/>
+</g>
+<g fill="#fff5d6">
+  <rect x="44" y="22" width="2" height="2" class="twinkle"/>
+  <rect x="62" y="7" width="1" height="1" class="twinkle twinkle-b"/>
+  <rect x="115" y="19" width="2" height="2" class="twinkle twinkle-c"/>
+  <rect x="260" y="15" width="2" height="2" class="twinkle"/>
+  <rect x="282" y="22" width="2" height="2" class="twinkle twinkle-b"/>
+  <rect x="298" y="9" width="1" height="1" class="twinkle twinkle-c"/>
+  <rect x="140" y="8" width="1" height="1" class="twinkle twinkle-d"/>
+  <rect x="190" y="12" width="2" height="2" class="twinkle twinkle-b"/>
+  <rect x="220" y="18" width="1" height="1" class="twinkle twinkle-c"/>
+</g>
+
+<!-- CONSTELLATION (small dipper shape) -->
+<g fill="#e8d9b5" opacity=".55">
+  <rect x="170" y="7" width="1" height="1"/>
+  <rect x="178" y="5" width="1" height="1"/>
+  <rect x="186" y="7" width="1" height="1"/>
+  <rect x="183" y="11" width="1" height="1"/>
+  <rect x="192" y="13" width="1" height="1"/>
+  <rect x="198" y="15" width="1" height="1"/>
+</g>
+<g stroke="#c8b88a" stroke-width=".3" opacity=".25">
+  <line x1="170.5" y1="7.5" x2="178.5" y2="5.5"/>
+  <line x1="178.5" y1="5.5" x2="186.5" y2="7.5"/>
+  <line x1="186.5" y1="7.5" x2="183.5" y2="11.5"/>
+  <line x1="183.5" y1="11.5" x2="192.5" y2="13.5"/>
+  <line x1="192.5" y1="13.5" x2="198.5" y2="15.5"/>
+</g>
+
+<!-- SHOOTING STAR -->
+<g class="shoot">
+  <rect x="275" y="13" width="2" height="1" fill="#fff5d6"/>
+  <rect x="273" y="14" width="1" height="1" fill="#f2e8c4" opacity=".6"/>
+  <rect x="271" y="15" width="1" height="1" fill="#f2e8c4" opacity=".3"/>
+</g>
+
+<!-- BIRDS -->
+<g fill="#3a1650">
+  <rect x="80" y="35" width="1" height="1"/><rect x="81" y="34" width="1" height="1"/><rect x="82" y="35" width="1" height="1"/><rect x="83" y="34" width="1" height="1"/><rect x="84" y="35" width="1" height="1"/>
+  <rect x="100" y="42" width="1" height="1"/><rect x="101" y="41" width="1" height="1"/><rect x="102" y="42" width="1" height="1"/><rect x="103" y="41" width="1" height="1"/><rect x="104" y="42" width="1" height="1"/>
+  <rect x="218" y="38" width="1" height="1"/><rect x="219" y="37" width="1" height="1"/><rect x="220" y="38" width="1" height="1"/><rect x="221" y="37" width="1" height="1"/><rect x="222" y="38" width="1" height="1"/>
+  <rect x="240" y="44" width="1" height="1"/><rect x="241" y="43" width="1" height="1"/><rect x="242" y="44" width="1" height="1"/>
+  <rect x="60" y="40" width="1" height="1"/><rect x="61" y="39" width="1" height="1"/><rect x="62" y="40" width="1" height="1"/>
+</g>
+
+<!-- SUN -->
+<g>
+  <rect x="148" y="28" width="24" height="2" fill="#ffd980"/>
+  <rect x="143" y="30" width="34" height="2" fill="#ffd166"/>
+  <rect x="139" y="32" width="42" height="2" fill="#ffd166"/>
+  <rect x="136" y="34" width="48" height="2" fill="#ffc055"/>
+  <rect x="134" y="37" width="52" height="2" fill="#ffb84a"/>
+  <rect x="133" y="39" width="54" height="2" fill="#ffa844"/>
+  <rect x="132" y="42" width="56" height="2" fill="#ff9640"/>
+  <rect x="132" y="44" width="56" height="2" fill="#ff8a3c"/>
+  <rect x="132" y="47" width="56" height="2" fill="#ff7a42"/>
+  <rect x="132" y="49" width="56" height="2" fill="#ff6a4a"/>
+  <rect x="133" y="52" width="54" height="2" fill="#f55a54"/>
+  <rect x="134" y="54" width="52" height="2" fill="#e8455c"/>
+  <rect x="136" y="57" width="48" height="1" fill="#d33a5e"/>
+  <rect x="138" y="58" width="44" height="1" fill="#c3345e"/>
+  <rect x="141" y="59" width="38" height="1" fill="#b22e5e"/>
+  <rect x="145" y="60" width="30" height="1" fill="#a02858"/>
+  <rect x="150" y="61" width="20" height="1" fill="#8c2250"/>
+</g>
+
+<!-- FAR MOUNTAINS -->
+<g fill="#4a8f8a">
+  <rect x="0" y="64" width="18" height="12"/><rect x="12" y="61" width="16" height="15"/><rect x="28" y="64" width="22" height="12"/><rect x="50" y="60" width="18" height="16"/><rect x="68" y="63" width="20" height="13"/><rect x="88" y="61" width="22" height="15"/><rect x="110" y="64" width="18" height="12"/><rect x="128" y="60" width="20" height="16"/><rect x="148" y="62" width="24" height="14"/><rect x="172" y="60" width="22" height="16"/><rect x="194" y="63" width="20" height="13"/><rect x="212" y="60" width="24" height="16"/><rect x="236" y="64" width="22" height="12"/><rect x="258" y="62" width="20" height="14"/><rect x="278" y="60" width="22" height="16"/><rect x="300" y="64" width="20" height="12"/>
+</g>
+<!-- Snow caps -->
+<g fill="#e8e0d0" opacity=".65">
+  <rect x="12" y="61" width="5" height="1"/><rect x="14" y="62" width="3" height="1"/>
+  <rect x="50" y="60" width="5" height="1"/><rect x="52" y="61" width="3" height="1"/>
+  <rect x="128" y="60" width="5" height="1"/><rect x="130" y="61" width="3" height="1"/>
+  <rect x="172" y="60" width="5" height="1"/><rect x="174" y="61" width="3" height="1"/>
+  <rect x="212" y="60" width="5" height="1"/><rect x="214" y="61" width="3" height="1"/>
+  <rect x="278" y="60" width="5" height="1"/><rect x="280" y="61" width="3" height="1"/>
+</g>
+
+<!-- BACK MOUNTAINS -->
+<g fill="#2d7a7a">
+  <rect x="0" y="72" width="24" height="14"/><rect x="16" y="68" width="18" height="18"/><rect x="30" y="72" width="22" height="14"/><rect x="48" y="66" width="20" height="20"/><rect x="64" y="70" width="22" height="16"/><rect x="82" y="66" width="24" height="20"/><rect x="102" y="72" width="20" height="14"/><rect x="118" y="68" width="22" height="18"/><rect x="138" y="72" width="24" height="14"/><rect x="158" y="66" width="26" height="20"/><rect x="180" y="70" width="22" height="16"/><rect x="198" y="66" width="24" height="20"/><rect x="218" y="70" width="24" height="16"/><rect x="240" y="68" width="20" height="18"/><rect x="256" y="72" width="24" height="14"/><rect x="276" y="68" width="22" height="18"/><rect x="294" y="72" width="26" height="14"/>
+</g>
+
+<!-- PINE TREES on ridge -->
+<g fill="#1f5a5a">
+  <rect x="20" y="70" width="1" height="2"/><rect x="21" y="68" width="1" height="4"/><rect x="22" y="66" width="1" height="6"/><rect x="23" y="68" width="1" height="4"/><rect x="24" y="70" width="1" height="2"/>
+  <rect x="55" y="68" width="1" height="2"/><rect x="56" y="66" width="1" height="4"/><rect x="57" y="64" width="1" height="6"/><rect x="58" y="66" width="1" height="4"/><rect x="59" y="68" width="1" height="2"/>
+  <rect x="90" y="70" width="1" height="2"/><rect x="91" y="68" width="1" height="4"/><rect x="92" y="66" width="1" height="6"/><rect x="93" y="68" width="1" height="4"/><rect x="94" y="70" width="1" height="2"/>
+  <rect x="268" y="70" width="1" height="2"/><rect x="269" y="68" width="1" height="4"/><rect x="270" y="66" width="1" height="6"/><rect x="271" y="68" width="1" height="4"/><rect x="272" y="70" width="1" height="2"/>
+  <rect x="300" y="68" width="1" height="2"/><rect x="301" y="66" width="1" height="4"/><rect x="302" y="64" width="1" height="6"/><rect x="303" y="66" width="1" height="4"/><rect x="304" y="68" width="1" height="2"/>
+</g>
+
+<!-- FRONT MOUNTAINS -->
+<g fill="#154545">
+  <rect x="0" y="82" width="30" height="6"/><rect x="22" y="76" width="22" height="12"/><rect x="42" y="80" width="26" height="8"/><rect x="62" y="74" width="20" height="14"/><rect x="78" y="78" width="28" height="10"/><rect x="100" y="74" width="22" height="14"/><rect x="118" y="80" width="30" height="8"/><rect x="142" y="76" width="24" height="12"/><rect x="162" y="80" width="26" height="8"/><rect x="184" y="74" width="22" height="14"/><rect x="202" y="78" width="28" height="10"/><rect x="226" y="76" width="24" height="12"/><rect x="246" y="80" width="30" height="8"/><rect x="270" y="76" width="24" height="12"/><rect x="290" y="80" width="30" height="8"/>
+</g>
+
+<!-- FOREGROUND TREE SILHOUETTES -->
+<g fill="#0a0510">
+  <rect x="8" y="80" width="1" height="3"/><rect x="9" y="77" width="1" height="6"/><rect x="10" y="75" width="1" height="8"/><rect x="11" y="77" width="1" height="6"/><rect x="12" y="80" width="1" height="3"/>
+  <rect x="7" y="79" width="4" height="1"/>
+  <rect x="9" y="77" width="5" height="1"/>
+  <rect x="26" y="78" width="1" height="3"/><rect x="27" y="75" width="1" height="6"/><rect x="28" y="73" width="1" height="8"/><rect x="29" y="75" width="1" height="6"/><rect x="30" y="78" width="1" height="3"/>
+  <rect x="26" y="76" width="5" height="1"/>
+  <rect x="288" y="78" width="1" height="3"/><rect x="289" y="75" width="1" height="6"/><rect x="290" y="73" width="1" height="8"/><rect x="291" y="75" width="1" height="6"/><rect x="292" y="78" width="1" height="3"/>
+  <rect x="287" y="76" width="5" height="1"/>
+  <rect x="305" y="79" width="1" height="3"/><rect x="306" y="76" width="1" height="6"/><rect x="307" y="74" width="1" height="8"/><rect x="308" y="76" width="1" height="6"/><rect x="309" y="79" width="1" height="3"/>
+  <rect x="305" y="77" width="5" height="1"/>
+</g>
+
+<!-- OWL on right foreground tree -->
+<g fill="#0a0510">
+  <rect x="289" y="73" width="1" height="1"/>
+  <rect x="291" y="73" width="1" height="1"/>
+  <rect x="289" y="74" width="3" height="4"/>
+  <rect x="288" y="75" width="1" height="2"/>
+  <rect x="292" y="75" width="1" height="2"/>
+</g>
+<g fill="#c3851e">
+  <rect x="289" y="74" width="1" height="1"/>
+  <rect x="291" y="74" width="1" height="1"/>
+</g>
+
+<!-- DISTANT TENT with LANTERN -->
+<g>
+  <rect x="50" y="82" width="1" height="1" fill="#6b3a20"/>
+  <rect x="49" y="83" width="3" height="1" fill="#6b3a20"/>
+  <rect x="48" y="84" width="5" height="1" fill="#5c3020"/>
+  <rect x="47" y="85" width="7" height="1" fill="#5c3020"/>
+  <rect x="46" y="86" width="9" height="2" fill="#4a2818"/>
+  <rect x="50" y="86" width="1" height="2" fill="#1a0d08"/>
+  <rect x="43" y="82" width="1" height="6" fill="#3a1f12"/>
+  <rect x="41" y="82" width="3" height="1" fill="#3a1f12"/>
+  <rect x="40" y="83" width="3" height="3" fill="#4a2818"/>
+  <rect x="41" y="84" width="1" height="1" fill="#ffd166"/>
+</g>
+<g fill="#ffd166" opacity=".3" class="pulse">
+  <rect x="39" y="83" width="5" height="3"/>
+</g>
+
+<!-- GROUND -->
+<rect y="88" width="320" height="32" fill="#3a1f12"/>
+<rect y="88" width="320" height="1" fill="#6b3a20"/>
+<rect y="89" width="320" height="1" fill="#4a2818"/>
+<rect y="92" width="320" height="1" fill="#2a170c"/>
+
+<!-- FIRE GLOW on ground -->
+<g fill="#ff8a3c" opacity=".06">
+  <rect x="138" y="104" width="44" height="4"/>
+  <rect x="143" y="108" width="34" height="3"/>
+  <rect x="148" y="111" width="24" height="2"/>
+</g>
+
+<!-- GROUND TEXTURE -->
+<g fill="#4a2818">
+  <rect x="25" y="95" width="3" height="1"/><rect x="75" y="107" width="4" height="1"/><rect x="240" y="100" width="3" height="1"/><rect x="295" y="110" width="5" height="1"/>
+  <rect x="130" y="106" width="2" height="1"/><rect x="185" y="97" width="3" height="1"/><rect x="200" y="110" width="4" height="1"/>
+</g>
+<g fill="#5c3020">
+  <rect x="15" y="102" width="2" height="1"/><rect x="50" y="111" width="3" height="1"/><rect x="260" y="108" width="2" height="1"/>
+  <rect x="165" y="108" width="2" height="1"/><rect x="278" y="105" width="3" height="1"/>
+</g>
+<g fill="#2a170c">
+  <rect x="35" y="108" width="6" height="1"/><rect x="85" y="114" width="5" height="1"/><rect x="190" y="110" width="4" height="1"/><rect x="275" y="115" width="8" height="1"/>
+</g>
+
+<!-- MUSHROOMS -->
+<g>
+  <rect x="13" y="89" width="5" height="1" fill="#c03a5e"/>
+  <rect x="14" y="89" width="3" height="1" fill="#8c2a4a"/>
+  <rect x="15" y="90" width="1" height="2" fill="#e8d9b5"/>
+  <rect x="18" y="90" width="2" height="1" fill="#8c2a4a"/>
+  <rect x="19" y="91" width="1" height="1" fill="#e8d9b5"/>
+</g>
+<g>
+  <rect x="295" y="89" width="5" height="1" fill="#c03a5e"/>
+  <rect x="296" y="89" width="3" height="1" fill="#8c2a4a"/>
+  <rect x="297" y="90" width="1" height="2" fill="#e8d9b5"/>
+</g>
+
+<!-- GRASS TUFTS -->
+<g fill="#1a4530">
+  <rect x="18" y="97" width="1" height="1"/><rect x="19" y="96" width="1" height="2"/><rect x="20" y="97" width="1" height="1"/>
+  <rect x="68" y="95" width="1" height="2"/><rect x="69" y="94" width="1" height="3"/><rect x="70" y="95" width="1" height="2"/>
+  <rect x="95" y="97" width="1" height="2"/><rect x="96" y="96" width="1" height="3"/><rect x="97" y="97" width="1" height="2"/>
+  <rect x="225" y="98" width="1" height="2"/><rect x="226" y="97" width="1" height="3"/><rect x="227" y="98" width="1" height="2"/>
+  <rect x="255" y="96" width="1" height="2"/><rect x="256" y="95" width="1" height="3"/><rect x="257" y="96" width="1" height="2"/>
+  <rect x="302" y="98" width="1" height="2"/><rect x="303" y="97" width="1" height="3"/><rect x="304" y="98" width="1" height="2"/>
+</g>
+<g fill="#0f3020" opacity=".55">
+  <rect x="5" y="91" width="6" height="1"/>
+  <rect x="310" y="93" width="6" height="1"/>
+  <rect x="150" y="116" width="8" height="1"/>
+</g>
+
+<!-- FOOTPATH -->
+<g fill="#6b3a20" opacity=".6">
+  <rect x="5" y="115" width="2" height="1"/><rect x="15" y="113" width="2" height="1"/><rect x="30" y="115" width="2" height="1"/><rect x="45" y="112" width="2" height="1"/><rect x="62" y="114" width="2" height="1"/><rect x="85" y="113" width="2" height="1"/><rect x="110" y="115" width="2" height="1"/>
+</g>
+<g fill="#5c3020" opacity=".45">
+  <rect x="63" y="101" width="1" height="1"/><rect x="66" y="102" width="1" height="1"/>
+  <rect x="112" y="97" width="1" height="1"/><rect x="115" y="98" width="1" height="1"/>
+  <rect x="250" y="98" width="1" height="1"/><rect x="253" y="99" width="1" height="1"/>
+</g>
+
+<!-- FIREFLIES -->
+<g fill="#c8ff80">
+  <rect x="97" y="97" width="1" height="1" class="fly" opacity=".8"/>
+  <rect x="105" y="103" width="1" height="1" class="fly fly-b" opacity=".8"/>
+  <rect x="230" y="96" width="1" height="1" class="fly fly-c" opacity=".8"/>
+  <rect x="238" y="104" width="1" height="1" class="fly" opacity=".8"/>
+  <rect x="245" y="99" width="1" height="1" class="fly fly-b" opacity=".8"/>
+</g>
+<g fill="#a8e860" opacity=".12">
+  <rect x="96" y="96" width="3" height="3" class="fly"/>
+  <rect x="229" y="95" width="3" height="3" class="fly fly-c"/>
+</g>
+
+<!-- EMBERS -->
+<g fill="#ffb84a" class="pulse">
+  <rect x="90" y="101" width="1" height="1"/><rect x="108" y="99" width="2" height="1"/><rect x="118" y="103" width="1" height="1"/><rect x="136" y="101" width="2" height="1"/><rect x="178" y="101" width="2" height="1"/><rect x="192" y="104" width="1" height="1"/><rect x="210" y="99" width="2" height="1"/><rect x="226" y="103" width="1" height="1"/>
+</g>
+<g fill="#ff8a3c">
+  <rect x="99" y="102" width="1" height="1"/><rect x="145" y="103" width="1" height="1"/><rect x="202" y="104" width="1" height="1"/><rect x="234" y="100" width="1" height="1"/>
+</g>
+<g fill="#ffd166" class="pulse pulse-b">
+  <rect x="125" y="100" width="1" height="1"/><rect x="205" y="102" width="1" height="1"/>
+</g>
+
+<!-- STONE CIRCLE -->
+<g>
+  <rect x="138" y="101" width="5" height="3" fill="#6b6b70"/>
+  <rect x="138" y="101" width="5" height="1" fill="#8a8a90"/>
+  <rect x="138" y="103" width="5" height="1" fill="#4a4a50"/>
+  <rect x="138" y="101" width="2" height="1" fill="#1a4530" opacity=".35"/>
+  <rect x="154" y="99" width="5" height="2" fill="#7a7a80"/>
+  <rect x="154" y="99" width="5" height="1" fill="#9a9aa0"/>
+  <rect x="177" y="101" width="5" height="3" fill="#6b6b70"/>
+  <rect x="177" y="101" width="5" height="1" fill="#8a8a90"/>
+  <rect x="177" y="103" width="5" height="1" fill="#4a4a50"/>
+  <rect x="179" y="101" width="2" height="1" fill="#1a4530" opacity=".35"/>
+  <rect x="147" y="104" width="3" height="2" fill="#5c5c62"/>
+  <rect x="147" y="104" width="3" height="1" fill="#7a7a80"/>
+  <rect x="170" y="104" width="3" height="2" fill="#5c5c62"/>
+  <rect x="170" y="104" width="3" height="1" fill="#7a7a80"/>
+  <rect x="155" y="105" width="3" height="1" fill="#5c5c62"/>
+  <rect x="163" y="105" width="3" height="1" fill="#5c5c62"/>
+</g>
+
+<!-- LOG PILE (right of fire) -->
+<g>
+  <rect x="234" y="97" width="6" height="2" fill="#6b3a24"/>
+  <rect x="234" y="97" width="6" height="1" fill="#7a4a2a"/>
+  <rect x="234" y="97" width="1" height="2" fill="#2a170c"/>
+  <rect x="239" y="97" width="1" height="2" fill="#2a170c"/>
+  <rect x="232" y="99" width="8" height="2" fill="#6b3a24"/>
+  <rect x="232" y="99" width="8" height="1" fill="#7a4a2a"/>
+  <rect x="232" y="99" width="1" height="2" fill="#2a170c"/>
+  <rect x="239" y="99" width="1" height="2" fill="#2a170c"/>
+  <rect x="230" y="101" width="10" height="2" fill="#5c3020"/>
+  <rect x="230" y="101" width="10" height="1" fill="#6b3a24"/>
+  <rect x="230" y="103" width="10" height="1" fill="#3a1f12"/>
+  <rect x="230" y="101" width="1" height="2" fill="#2a170c"/>
+  <rect x="239" y="101" width="1" height="2" fill="#2a170c"/>
+</g>
+
+<!-- CAMPFIRE BASE LOGS -->
+<g>
+  <rect x="148" y="101" width="24" height="2" fill="#5c3020"/>
+  <rect x="146" y="103" width="28" height="2" fill="#3a1f12"/>
+  <rect x="148" y="100" width="1" height="1" fill="#7a4a2a"/>
+  <rect x="160" y="100" width="2" height="1" fill="#8a5a36"/>
+  <rect x="170" y="100" width="2" height="1" fill="#7a4a2a"/>
+  <rect x="147" y="101" width="1" height="2" fill="#2a170c"/>
+  <rect x="172" y="101" width="1" height="2" fill="#2a170c"/>
+</g>
+
+<!-- COOKING POT over fire (chain + tripod sticks + pot) -->
+<g>
+  <!-- tripod arms -->
+  <rect x="153" y="79" width="5" height="1" fill="#3a2a18"/>
+  <rect x="162" y="79" width="5" height="1" fill="#3a2a18"/>
+  <!-- chain links -->
+  <rect x="159" y="75" width="1" height="1" fill="#5c5c62"/>
+  <rect x="160" y="76" width="1" height="1" fill="#5c5c62"/>
+  <rect x="159" y="77" width="1" height="1" fill="#5c5c62"/>
+  <rect x="160" y="78" width="1" height="1" fill="#5c5c62"/>
+  <!-- pot body -->
+  <rect x="155" y="79" width="10" height="5" fill="#2a1a0a"/>
+  <rect x="155" y="79" width="10" height="1" fill="#4a3a1a"/>
+  <rect x="155" y="83" width="10" height="1" fill="#1a0d05"/>
+  <!-- pot rim / opening -->
+  <rect x="156" y="78" width="8" height="1" fill="#4a3a1a"/>
+  <!-- pot handles -->
+  <rect x="153" y="80" width="2" height="2" fill="#2a1a0a"/>
+  <rect x="165" y="80" width="2" height="2" fill="#2a1a0a"/>
+  <!-- liquid shimmer inside -->
+  <rect x="157" y="81" width="4" height="1" fill="#6b3a20" opacity=".5"/>
+</g>
+<!-- pot steam -->
+<g fill="#8a8a90" opacity=".35">
+  <g class="smoke smoke-c">
+    <rect x="158" y="76" width="2" height="1"/>
+    <rect x="159" y="74" width="1" height="2"/>
+  </g>
+</g>
+
+<!-- FLAMES -->
+<g fill="#c3345e">
+  <rect x="152" y="95" width="2" height="6"/>
+  <rect x="168" y="95" width="2" height="6"/>
+  <rect x="150" y="97" width="2" height="4"/>
+  <rect x="170" y="97" width="2" height="4"/>
+</g>
+<g fill="#e8455c" class="flicker">
+  <rect x="153" y="90" width="16" height="11"/>
+  <rect x="151" y="93" width="2" height="8"/>
+  <rect x="169" y="93" width="2" height="8"/>
+  <rect x="154" y="88" width="14" height="2"/>
+</g>
+<g fill="#ff8a3c" class="flicker">
+  <rect x="155" y="87" width="12" height="14"/>
+  <rect x="156" y="85" width="10" height="2"/>
+  <rect x="157" y="83" width="8" height="2"/>
+</g>
+<g fill="#ffd166" class="flicker">
+  <rect x="157" y="87" width="8" height="11"/>
+  <rect x="158" y="85" width="6" height="2"/>
+  <rect x="159" y="83" width="4" height="2"/>
+  <rect x="160" y="81" width="2" height="2"/>
+</g>
+<g fill="#fff5d6" class="flicker">
+  <rect x="159" y="90" width="4" height="6"/>
+  <rect x="160" y="88" width="2" height="2"/>
+</g>
+
+<!-- SPARKS -->
+<g fill="#ffd166">
+  <rect x="157" y="80" width="1" height="1" class="spark"/>
+  <rect x="163" y="82" width="1" height="1" class="spark spark-b"/>
+  <rect x="168" y="79" width="1" height="1" class="spark spark-c"/>
+  <rect x="154" y="83" width="1" height="1" class="spark spark-b"/>
+  <rect x="172" y="82" width="1" height="1" class="spark spark-d"/>
+  <rect x="149" y="84" width="1" height="1" class="spark spark-c"/>
+</g>
+
+<!-- SMOKE -->
+<g fill="#5c5c62" opacity=".7">
+  <g class="smoke"><rect x="159" y="78" width="3" height="2"/><rect x="160" y="76" width="2" height="2"/></g>
+  <g class="smoke smoke-b"><rect x="158" y="78" width="3" height="2"/><rect x="159" y="76" width="3" height="2"/></g>
+  <g class="smoke smoke-c"><rect x="160" y="78" width="3" height="2"/><rect x="161" y="76" width="2" height="2"/></g>
+  <g class="smoke smoke-d"><rect x="159" y="78" width="2" height="2"/><rect x="160" y="76" width="3" height="2"/></g>
+</g>
+<g fill="#8a8a90" opacity=".5">
+  <g class="smoke smoke-b"><rect x="161" y="74" width="2" height="2"/></g>
+  <g class="smoke smoke-d"><rect x="158" y="74" width="2" height="2"/></g>
+</g>
+<g fill="#7a7a80" opacity=".3">
+  <g class="smoke smoke-c"><rect x="158" y="70" width="4" height="2"/><rect x="160" y="68" width="3" height="2"/></g>
+</g>
+
+<!-- F1 BACKER: seated on log -->
+<g>
+  <rect x="60" y="98" width="12" height="3" fill="#5c3020"/>
+  <rect x="60" y="98" width="12" height="1" fill="#7a4a2a"/>
+  <rect x="60" y="100" width="12" height="1" fill="#3a1f12"/>
+  <rect x="60" y="98" width="1" height="3" fill="#2a170c"/>
+  <rect x="71" y="98" width="1" height="3" fill="#2a170c"/>
+</g>
+<g fill="#0a0510">
+  <rect x="63" y="85" width="6" height="2"/>
+  <rect x="62" y="87" width="8" height="3"/>
+  <rect x="62" y="90" width="8" height="5"/>
+  <rect x="61" y="92" width="2" height="4"/>
+  <rect x="69" y="92" width="2" height="4"/>
+  <rect x="62" y="95" width="3" height="3"/>
+  <rect x="67" y="95" width="3" height="3"/>
+</g>
+<g fill="#2a0a0a">
+  <rect x="61" y="90" width="1" height="5"/>
+  <rect x="69" y="90" width="1" height="5"/>
+</g>
+<g fill="#7a4a3a" opacity=".45">
+  <rect x="63" y="86" width="6" height="2"/>
+</g>
+<g fill="#8c3a2e" opacity=".7">
+  <rect x="70" y="88" width="1" height="7"/>
+</g>
+<!-- Scroll -->
+<g>
+  <rect x="73" y="99" width="4" height="2" fill="#e8d9b5"/>
+  <rect x="73" y="99" width="4" height="1" fill="#f2e8c4"/>
+  <rect x="74" y="100" width="2" height="1" fill="#8a6438" opacity=".6"/>
+  <rect x="75" y="99" width="1" height="2" fill="#8a6438"/>
+</g>
+<!-- Coin stacks -->
+<g>
+  <rect x="80" y="97" width="6" height="1" fill="#8c5c10"/>
+  <rect x="80" y="96" width="6" height="1" fill="#c3851e"/>
+  <rect x="80" y="95" width="6" height="1" fill="#ffd166"/>
+  <rect x="80" y="94" width="6" height="1" fill="#ffb84a"/>
+  <rect x="80" y="93" width="6" height="1" fill="#ffd166"/>
+  <rect x="81" y="92" width="4" height="1" fill="#ffb84a"/>
+  <rect x="80" y="93" width="1" height="4" fill="#fff5d6" opacity=".45"/>
+  <rect x="87" y="96" width="4" height="1" fill="#c3851e"/>
+  <rect x="87" y="95" width="4" height="1" fill="#ffd166"/>
+  <rect x="88" y="94" width="2" height="1" fill="#ffb84a"/>
+</g>
+<g fill="#fff5d6" class="twinkle twinkle-b">
+  <rect x="82" y="94" width="1" height="1"/>
+</g>
+<g fill="#ffd166" opacity=".75">
+  <rect x="77" y="98" width="2" height="1"/>
+</g>
+
+<!-- F2 PATRON: feeding log to fire -->
+<g fill="#0a0510">
+  <rect x="108" y="82" width="4" height="4"/>
+  <rect x="107" y="82" width="6" height="1"/>
+  <rect x="107" y="86" width="6" height="6"/>
+  <rect x="106" y="88" width="2" height="3"/>
+  <rect x="113" y="88" width="3" height="2"/>
+  <rect x="116" y="89" width="12" height="2"/>
+  <rect x="108" y="92" width="2" height="6"/>
+  <rect x="111" y="92" width="2" height="6"/>
+</g>
+<g fill="#7a4a3a" opacity=".35">
+  <rect x="108" y="82" width="4" height="3"/>
+</g>
+<g fill="#2a170c">
+  <rect x="128" y="89" width="2" height="2"/>
+</g>
+<!-- Log -->
+<g>
+  <rect x="118" y="88" width="28" height="3" fill="#6b3a24"/>
+  <rect x="118" y="88" width="28" height="1" fill="#8a5a36"/>
+  <rect x="118" y="90" width="28" height="1" fill="#3a1f12"/>
+  <rect x="122" y="89" width="4" height="1" fill="#4a2818"/>
+  <rect x="127" y="89" width="2" height="1" fill="#2a170c"/>
+  <rect x="132" y="89" width="5" height="1" fill="#4a2818"/>
+  <rect x="118" y="88" width="1" height="3" fill="#2a170c"/>
+  <rect x="144" y="88" width="2" height="3" fill="#ff8a3c"/>
+  <rect x="145" y="87" width="1" height="1" fill="#ffd166"/>
+  <rect x="146" y="88" width="1" height="2" fill="#c3345e"/>
+</g>
+<g fill="#c04a5e" opacity=".75">
+  <rect x="113" y="86" width="1" height="6"/>
+</g>
+
+<!-- F3 THE INDEX: tall cloaked figure -->
+<g fill="#0a0510">
+  <rect x="200" y="74" width="6" height="2"/>
+  <rect x="199" y="76" width="8" height="4"/>
+  <rect x="197" y="80" width="12" height="3"/>
+  <rect x="198" y="83" width="10" height="12"/>
+  <rect x="197" y="85" width="1" height="8"/>
+  <rect x="208" y="85" width="1" height="8"/>
+  <rect x="197" y="95" width="2" height="2"/>
+  <rect x="200" y="95" width="2" height="3"/>
+  <rect x="203" y="95" width="2" height="2"/>
+  <rect x="206" y="95" width="2" height="3"/>
+  <rect x="200" y="97" width="2" height="1"/>
+  <rect x="205" y="97" width="2" height="1"/>
+</g>
+<g fill="#1a0d08" opacity=".65">
+  <rect x="199" y="84" width="1" height="10"/>
+  <rect x="203" y="84" width="1" height="10"/>
+  <rect x="207" y="84" width="1" height="8"/>
+</g>
+<!-- Staff -->
+<g>
+  <rect x="195" y="78" width="1" height="20" fill="#5c3020"/>
+  <rect x="194" y="78" width="3" height="2" fill="#6b3a24"/>
+  <rect x="194" y="76" width="3" height="2" fill="#ffd166"/>
+  <rect x="195" y="75" width="1" height="1" fill="#fff5d6"/>
+  <rect x="195" y="82" width="1" height="1" fill="#ffd166" opacity=".45"/>
+  <rect x="195" y="86" width="1" height="1" fill="#ffd166" opacity=".3"/>
+</g>
+<g fill="#ffd166" opacity=".22" class="pulse">
+  <rect x="193" y="75" width="5" height="3"/>
+</g>
+<g fill="#b22e5e" opacity=".65">
+  <rect x="197" y="80" width="1" height="15"/>
+</g>
+
+<!-- F4 FRIEND: crouched, warming hands -->
+<g fill="#0a0510">
+  <rect x="216" y="88" width="4" height="3"/>
+  <rect x="217" y="87" width="3" height="1"/>
+  <rect x="215" y="91" width="6" height="4"/>
+  <rect x="212" y="92" width="4" height="2"/>
+  <rect x="209" y="93" width="3" height="2"/>
+  <rect x="215" y="95" width="3" height="3"/>
+  <rect x="219" y="95" width="3" height="3"/>
+</g>
+<g fill="#5c1e3a" opacity=".55">
+  <rect x="215" y="91" width="6" height="1"/>
+</g>
+<g fill="#7a4a3a" opacity=".35">
+  <rect x="216" y="88" width="4" height="2"/>
+</g>
+<g fill="#ff8a3c" opacity=".6">
+  <rect x="209" y="92" width="1" height="3"/>
+</g>
+
+<!-- F5 BUILDER: standing with hammer -->
+<g fill="#0a0510">
+  <rect x="250" y="82" width="4" height="3"/>
+  <rect x="249" y="84" width="6" height="1"/>
+  <rect x="249" y="85" width="6" height="6"/>
+  <rect x="247" y="87" width="2" height="4"/>
+  <rect x="255" y="87" width="2" height="4"/>
+  <rect x="249" y="91" width="2" height="7"/>
+  <rect x="253" y="91" width="2" height="7"/>
+</g>
+<g fill="#7a4a3a" opacity=".35">
+  <rect x="250" y="82" width="4" height="3"/>
+</g>
+<rect x="249" y="89" width="6" height="1" fill="#4a2818"/>
+<g>
+  <rect x="246" y="89" width="3" height="3" fill="#3a1f12"/>
+  <rect x="246" y="89" width="3" height="1" fill="#5c3020"/>
+  <rect x="247" y="89" width="1" height="1" fill="#8a8a90"/>
+</g>
+<g>
+  <rect x="256" y="85" width="1" height="6" fill="#5c3020"/>
+  <rect x="254" y="84" width="4" height="2" fill="#6b6b70"/>
+  <rect x="254" y="84" width="4" height="1" fill="#8a8a90"/>
+  <rect x="254" y="84" width="1" height="1" fill="#aaaaaf"/>
+</g>
+<g fill="#c04a5e" opacity=".55">
+  <rect x="248" y="85" width="1" height="6"/>
+</g>
+
+<!-- LABELS -->
+<g font-family="ui-monospace, Menlo, monospace" font-size="3" fill="#f2e8c4" text-anchor="middle" letter-spacing="0.3">
+  <text x="66" y="82">BACKER</text>
+  <text x="110" y="79">PATRON</text>
+  <text x="203" y="72">THE INDEX</text>
+  <text x="218" y="85">FRIEND</text>
+  <text x="252" y="80">BUILDER</text>
+</g>
+
+<!-- CAPTION SCROLL -->
+<g>
+  <rect x="85" y="108" width="150" height="10" fill="#6b4a2a"/>
+  <rect x="85" y="108" width="150" height="1" fill="#a57a42"/>
+  <rect x="85" y="117" width="150" height="1" fill="#3a2510"/>
+  <rect x="86" y="109" width="148" height="1" fill="#8a6030" opacity=".25"/>
+  <rect x="82" y="109" width="3" height="8" fill="#5c3d22"/>
+  <rect x="82" y="109" width="1" height="8" fill="#7a5a2e"/>
+  <rect x="82" y="108" width="3" height="1" fill="#4a2e18"/>
+  <rect x="82" y="117" width="3" height="1" fill="#4a2e18"/>
+  <rect x="235" y="109" width="3" height="8" fill="#5c3d22"/>
+  <rect x="237" y="109" width="1" height="8" fill="#4a2e18"/>
+  <rect x="235" y="108" width="3" height="1" fill="#4a2e18"/>
+  <rect x="235" y="117" width="3" height="1" fill="#4a2e18"/>
+</g>
+<text x="160" y="115" font-family="Georgia, 'Times New Roman', serif" font-size="5" font-style="italic" fill="#f2e8c4" text-anchor="middle">Five strangers, one steady fire.</text>
+
+</svg>

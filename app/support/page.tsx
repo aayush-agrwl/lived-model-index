@@ -1,3 +1,5 @@
+import SupportHeroSvg from "@/components/support-hero-svg";
+
 export const metadata = {
   title: "Support the Index · AI Mood Index",
 };
@@ -34,56 +36,63 @@ const PAYMENT_LINKS: { label: string; href: string }[] = [
 
 export default function SupportPage() {
   return (
-    <div className="mx-auto max-w-[680px] space-y-8">
-      <section>
-        <h1 className="font-serif text-[40px] font-medium leading-[1.05] tracking-tight text-[var(--foreground)]">
-          Support the index and help us interview more LLMs!
-        </h1>
+    <>
+      {/* Edge-to-edge hero — breaks out of the layout's max-w-5xl parent */}
+      <section className="mt-6 w-screen ml-[calc(50%-50vw)] mr-[calc(50%-50vw)]">
+        <SupportHeroSvg />
       </section>
 
-      <section className="space-y-4 text-[17px] leading-[1.6] text-[var(--ink-2)]">
-        <p>
-          The AI Mood Index is for the public, by the public. It lives outside
-          any paywall or login: free to read, free to cite, free to fork. The
-          work that keeps it going, though, costs money: every day, the same
-          battery is put to every model in the panel, and every answer is scored
-          by a judge model. The wider the panel, the more interesting the record
-          becomes over time. Any monetary contribution you send here is routed
-          straight back into API credits so more models can be added to the
-          daily run.
-        </p>
-        <p>
-          Contributions support API costs for adding more LLMs. Not tax-deductible;
-          I&apos;m an individual, not a registered nonprofit.
-        </p>
-        <p className="text-[14px] leading-[1.55] text-[var(--muted)]">
-          <span className="font-medium uppercase tracking-[0.14em] text-[var(--foreground)]">
-            Transparency
-          </span>
-          {" · "}
-          Contributions cover API credits for additional models in the daily
-          panel; I&apos;m an individual, not a registered charity.
-        </p>
-      </section>
+      <div className="mx-auto mt-12 max-w-[680px] space-y-8">
+        <section>
+          <h1 className="font-serif text-[40px] font-medium leading-[1.05] tracking-tight text-[var(--foreground)]">
+            Support the index and help us interview more LLMs!
+          </h1>
+        </section>
 
-      <section className="grid gap-3 sm:grid-cols-3">
-        {PAYMENT_LINKS.map((link) => (
-          <a
-            key={link.label}
-            href={link.href}
-            className="rounded-sm border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-center text-[13.5px] font-medium text-[var(--foreground)] shadow-sm transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
-          >
-            {link.label}
-          </a>
-        ))}
-      </section>
+        <section className="space-y-4 text-[17px] leading-[1.6] text-[var(--ink-2)]">
+          <p>
+            The AI Mood Index is for the public, by the public. It lives outside
+            any paywall or login: free to read, free to cite, free to fork. The
+            work that keeps it going, though, costs money: every day, the same
+            battery is put to every model in the panel, and every answer is scored
+            by a judge model. The wider the panel, the more interesting the record
+            becomes over time. Any monetary contribution you send here is routed
+            straight back into API credits so more models can be added to the
+            daily run.
+          </p>
+          <p>
+            Contributions support API costs for adding more LLMs. Not tax-deductible;
+            I&apos;m an individual, not a registered nonprofit.
+          </p>
+          <p className="text-[14px] leading-[1.55] text-[var(--muted)]">
+            <span className="font-medium uppercase tracking-[0.14em] text-[var(--foreground)]">
+              Transparency
+            </span>
+            {" · "}
+            Contributions cover API credits for additional models in the daily
+            panel; I&apos;m an individual, not a registered charity.
+          </p>
+        </section>
 
-      <p className="text-[14px] leading-[1.6] text-[var(--ink-2)]">
-        You can also transfer your monetary contribution to this UPI ID:{" "}
-        <code className="rounded-sm bg-[var(--surface)] px-1.5 py-0.5 text-[13px]">
-          username.aayush-1@okicici
-        </code>
-      </p>
-    </div>
+        <section className="grid gap-3 sm:grid-cols-3">
+          {PAYMENT_LINKS.map((link) => (
+            <a
+              key={link.label}
+              href={link.href}
+              className="rounded-sm border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-center text-[13.5px] font-medium text-[var(--foreground)] shadow-sm transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
+            >
+              {link.label}
+            </a>
+          ))}
+        </section>
+
+        <p className="text-[14px] leading-[1.6] text-[var(--ink-2)]">
+          You can also transfer your monetary contribution to this UPI ID:{" "}
+          <code className="rounded-sm bg-[var(--surface)] px-1.5 py-0.5 text-[13px]">
+            username.aayush-1@okicici
+          </code>
+        </p>
+      </div>
+    </>
   );
 }
