@@ -36,18 +36,14 @@ const PAYMENT_LINKS: { label: string; href: string }[] = [
 
 export default function SupportPage() {
   return (
-    <>
-      {/* Edge-to-edge hero — breaks out of the layout's max-w-5xl parent */}
-      <section className="mt-6 w-screen ml-[calc(50%-50vw)] mr-[calc(50%-50vw)]">
-        <SupportHeroSvg />
-      </section>
+    <div className="mx-auto max-w-[680px] space-y-8">
+      <SupportHeroSvg />
 
-      <div className="mx-auto mt-12 max-w-[680px] space-y-8">
-        <section>
-          <h1 className="font-serif text-[40px] font-medium leading-[1.05] tracking-tight text-[var(--foreground)]">
-            Support the index and help us interview more LLMs!
-          </h1>
-        </section>
+      <section>
+        <h1 className="font-serif text-[40px] font-medium leading-[1.05] tracking-tight text-[var(--foreground)]">
+          Support the index and help us interview more LLMs!
+        </h1>
+      </section>
 
         <section className="space-y-4 text-[17px] leading-[1.6] text-[var(--ink-2)]">
           <p>
@@ -92,7 +88,6 @@ export default function SupportPage() {
             username.aayush-1@okicici
           </code>
         </p>
-      </div>
-    </>
+    </div>
   );
 }

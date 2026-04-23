@@ -16,12 +16,12 @@ try {
 export default function SupportHeroSvg() {
   return (
     <figure
-      className="pixel-art relative w-full overflow-hidden border-y border-[var(--rule)] bg-[#120a2a]"
+      className="pixel-art relative w-full overflow-hidden rounded-sm border border-[var(--rule)] bg-[#120a2a]"
       aria-label="Pixel art: five figures gathered around a campfire under a starlit sky. A backer with coins, a patron feeding the fire, the tall cloaked Index holding a glowing staff, a friend warming hands, and a builder with a hammer. An owl watches from a tree. Caption: Five strangers, one steady fire."
     >
       {supportHeroSvg ? (
         <div
-          className="block h-auto max-h-[62vh] w-full [&>svg]:block [&>svg]:h-auto [&>svg]:max-h-[62vh] [&>svg]:w-full"
+          className="block w-full [&>svg]:block [&>svg]:w-full"
           dangerouslySetInnerHTML={{ __html: supportHeroSvg }}
         />
       ) : (
