@@ -29,9 +29,6 @@ export default function HeroSvg() {
           className="block h-auto max-h-[62vh] w-full"
         />
       )}
-      <figcaption className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-sm bg-[rgba(250,246,238,0.78)] px-3 py-1 font-serif text-[13px] italic text-[rgba(20,24,18,0.72)]">
-        Five models around a fire. A standing record.
-      </figcaption>
     </figure>
   );
 }

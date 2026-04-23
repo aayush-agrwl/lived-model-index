@@ -58,7 +58,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span>
                 AI Mood Index · automated since launch · Anchor Set v1 · Panel v1 (free tier).
               </span>
-              <span className="font-serif italic">A standing record.</span>
             </div>
           </footer>
         </div>
