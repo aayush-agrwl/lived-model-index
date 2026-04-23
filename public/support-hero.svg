@@ -1,4 +1,4 @@
-<svg viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pixel art at dusk: five figures gathered around a campfire under a starlit sky. A backer counts coins, a patron feeds the fire, the tall cloaked Index holds a glowing staff, a friend warms hands, and a builder grips a hammer. An owl watches from a tree. Caption: Five strangers, one steady fire.">
+<svg viewBox="0 0 320 125" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pixel art at dusk: five figures gathered around a campfire under a starlit sky. A backer counts coins, a patron feeds the fire, the tall cloaked Index holds a glowing staff, a friend warms hands, and a builder grips a hammer. An owl watches from a tree. Caption: Five strangers, one steady fire.">
 <defs>
 <style>
   .smoke{animation:smokeRise 4s linear infinite;transform-box:fill-box;transform-origin:center}
