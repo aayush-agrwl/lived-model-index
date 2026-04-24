@@ -56,10 +56,6 @@ export default function SupportPage() {
             straight back into API credits so more models can be added to the
             daily run.
           </p>
-          <p>
-            Contributions support API costs for adding more LLMs. Not tax-deductible;
-            I&apos;m an individual, not a registered nonprofit.
-          </p>
           <p className="text-[14px] leading-[1.55] text-[var(--muted)]">
             <span className="font-medium uppercase tracking-[0.14em] text-[var(--foreground)]">
               Transparency
