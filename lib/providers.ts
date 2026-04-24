@@ -128,6 +128,27 @@ export async function chatCall(params: ChatCallParams): Promise<ChatCallResult> 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const started = Date.now();
+      // OpenRouter-specific routing preferences — spread onto the OpenAI
+      // body only for the OpenRouter provider path. Two hints:
+      //   - sort: "throughput" picks the fastest (tokens/s) available
+      //     backend for this model. For slow free-tier routes like
+      //     GLM 4.5 Air, this can cut per-call latency materially.
+      //   - require_parameters: true filters out backends that silently
+      //     ignore params we care about (specifically response_format
+      //     for JSON mode). Should also reduce our JSON-contract retry
+      //     rate on the OpenRouter slot.
+      // The `provider` field isn't in the OpenAI schema, so we cast via
+      // `unknown` to an empty record — TypeScript won't see the fields,
+      // but the runtime spread still carries them onto the request body.
+      const openrouterRouting =
+        provider === "openrouter"
+          ? ({
+              provider: {
+                sort: "throughput",
+                require_parameters: true,
+              },
+            } as unknown as Record<string, never>)
+          : {};
       const completion = await client.chat.completions.create(
         {
           model: modelId,
@@ -136,6 +157,7 @@ export async function chatCall(params: ChatCallParams): Promise<ChatCallResult> 
           top_p: topP ?? 1.0,
           ...(maxTokens ? { max_tokens: maxTokens } : {}),
           ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+          ...openrouterRouting,
         },
         { timeout: callTimeoutMs },
       );
