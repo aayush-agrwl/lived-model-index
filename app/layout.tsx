@@ -16,10 +16,33 @@ const ebGaramond = EB_Garamond({
   style: ["normal", "italic"],
 });
 
+// Required for Next.js to resolve the OG/Twitter image URLs absolutely.
+// Without metadataBase, social platforms (WhatsApp in particular) receive
+// relative image URLs and fail to render the preview card.
+const SITE_URL = "https://ai-mood-index.vercel.app";
+const SITE_DESC =
+  "Every day, the same questions are put to every major AI. Their answers reveal something unexpected: patterns of feeling, preference, and self-perception that look strikingly human.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "AI Mood Index",
-  description:
-    "Every day, the same questions are put to every major AI. Their answers reveal something unexpected: patterns of feeling, preference, and self-perception that look strikingly human.",
+  description: SITE_DESC,
+  // The OG and Twitter images are picked up automatically from
+  //   app/opengraph-image.png  and  app/twitter-image.png
+  // Next.js emits the correct <meta property="og:image" ...> and
+  // <meta name="twitter:image" ...> tags for us at build time.
+  openGraph: {
+    title: "AI Mood Index",
+    description: SITE_DESC,
+    url: SITE_URL,
+    siteName: "AI Mood Index",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "AI Mood Index",
+    description: SITE_DESC,
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
