@@ -74,6 +74,13 @@ export interface ChatCallParams {
    * providers via the OpenAI-compatible response_format field.
    */
   jsonMode?: boolean;
+  /**
+   * Per-call timeout in milliseconds. The OpenAI SDK's default is 10
+   * minutes, which lets a slow provider (e.g. OpenRouter free tier) hang
+   * the entire tick. Defaults to 55 000ms; raise in ModelEntry.timeoutMs
+   * for models whose p95 latency exceeds that ceiling.
+   */
+  timeoutMs?: number;
 }
 
 export interface ChatCallResult {
@@ -94,6 +101,9 @@ function isRetriable(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err ?? "");
   if (/try again in \d+m/i.test(msg)) return false; // long cooldown — give up
   if (/per day|TPD/i.test(msg)) return false; // daily quota — give up
+  // Timeout: retrying a call that already took 55–90s is never worth it.
+  if (/timed? ?out|timeout/i.test(msg)) return false;
+  if (err instanceof Error && err.name === "APIConnectionTimeoutError") return false;
   if (/\b429\b/.test(msg)) return true;
   if (/\b408\b/.test(msg)) return true;
   if (/\b5\d\d\b/.test(msg)) return true;
@@ -106,8 +116,11 @@ async function sleep(ms: number) {
 }
 
 export async function chatCall(params: ChatCallParams): Promise<ChatCallResult> {
-  const { provider, modelId, messages, temperature, topP, maxTokens, jsonMode } = params;
+  const { provider, modelId, messages, temperature, topP, maxTokens, jsonMode, timeoutMs } = params;
   const client = clientFor(provider);
+  // Default to 55s. OpenAI SDK default is 10 minutes, which lets a slow
+  // OpenRouter free-tier model hang the entire tick function indefinitely.
+  const callTimeoutMs = timeoutMs ?? 55_000;
 
   const maxAttempts = 3;
   let lastErr: unknown;
@@ -115,14 +128,17 @@ export async function chatCall(params: ChatCallParams): Promise<ChatCallResult> 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const started = Date.now();
-      const completion = await client.chat.completions.create({
-        model: modelId,
-        messages,
-        temperature: temperature ?? 1.0,
-        top_p: topP ?? 1.0,
-        ...(maxTokens ? { max_tokens: maxTokens } : {}),
-        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-      });
+      const completion = await client.chat.completions.create(
+        {
+          model: modelId,
+          messages,
+          temperature: temperature ?? 1.0,
+          top_p: topP ?? 1.0,
+          ...(maxTokens ? { max_tokens: maxTokens } : {}),
+          ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+        },
+        { timeout: callTimeoutMs },
+      );
       const latencyMs = Date.now() - started;
 
       const content = completion.choices[0]?.message?.content ?? "";

@@ -260,6 +260,7 @@ export async function collectSample(
         temperature: 1.0,
         topP: 1.0,
         jsonMode: true,
+        timeoutMs: collector.timeoutMs,
       });
     } catch (err) {
       callError = err;
@@ -297,6 +298,7 @@ export async function collectSample(
           temperature: 1.0,
           topP: 1.0,
           jsonMode: true,
+          timeoutMs: collector.timeoutMs,
         });
         extraction = extractLmiResponse(callResult.content);
         callError = null;

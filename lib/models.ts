@@ -48,6 +48,13 @@ export interface ModelEntry {
   family: string;
   /** Display order in UI. */
   order: number;
+  /**
+   * Per-call timeout in milliseconds passed to the OpenAI SDK.
+   * Defaults to 55 000ms in chatCall if unset.
+   * Raise this for providers (e.g. OpenRouter free tier) whose
+   * p95 latency regularly exceeds the default ceiling.
+   */
+  timeoutMs?: number;
 }
 
 export const COLLECTOR_MODELS: ModelEntry[] = [
@@ -105,6 +112,10 @@ export const COLLECTOR_MODELS: ModelEntry[] = [
     modelId: "z-ai/glm-4.5-air:free",
     family: "GLM",
     order: 60,
+    // GLM on OpenRouter free tier averages ~45s per call. Give it 90s
+    // headroom so normal calls succeed, but cap it well below the
+    // 300s Pro function ceiling so the tick never hangs indefinitely.
+    timeoutMs: 90_000,
   },
 ];
 
