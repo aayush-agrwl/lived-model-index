@@ -4,12 +4,14 @@ import type { Provider } from "./models";
 /**
  * Unified OpenAI-compatible client layer.
  *
- * All three providers on our free-tier stack expose an OpenAI-compatible
+ * All providers on our free-tier stack expose an OpenAI-compatible
  * Chat Completions endpoint, so a single SDK suffices:
  *
  *   - Google Gemini via its OpenAI compatibility endpoint
  *   - Groq natively
  *   - OpenRouter natively
+ *   - Mistral La Plateforme natively
+ *   - SambaNova Cloud natively
  *
  * If we later add Anthropic or a native-only API, this file gains a branch
  * without other files needing to change.
@@ -19,6 +21,8 @@ const BASE_URLS: Record<Provider, string> = {
   google: "https://generativelanguage.googleapis.com/v1beta/openai/",
   groq: "https://api.groq.com/openai/v1",
   openrouter: "https://openrouter.ai/api/v1",
+  mistral: "https://api.mistral.ai/v1",
+  sambanova: "https://api.sambanova.ai/v1",
 };
 
 function apiKeyFor(provider: Provider): string {
@@ -26,12 +30,15 @@ function apiKeyFor(provider: Provider): string {
     google: process.env.GOOGLE_API_KEY,
     groq: process.env.GROQ_API_KEY,
     openrouter: process.env.OPENROUTER_API_KEY,
+    mistral: process.env.MISTRAL_API_KEY,
+    sambanova: process.env.SAMBANOVA_API_KEY,
   }[provider];
 
   if (!env) {
     throw new Error(
-      `Missing API key env var for provider "${provider}". ` +
-        `Expected GOOGLE_API_KEY | GROQ_API_KEY | OPENROUTER_API_KEY in the environment.`,
+      `Missing API key env var for provider "${provider}". Expected one of ` +
+        `GOOGLE_API_KEY | GROQ_API_KEY | OPENROUTER_API_KEY | MISTRAL_API_KEY | SAMBANOVA_API_KEY ` +
+        `in the environment.`,
     );
   }
   return env;

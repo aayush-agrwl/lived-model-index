@@ -22,7 +22,7 @@ const V2_PROMPTS_BY_ID = new Map<string, AnchorV2Prompt>(
 /**
  * Per-provider floor on per-call pacing. Providers have different
  * per-minute rate limits on their free tiers, and our collector
- * issues 10 calls in quick succession for a single sample.
+ * issues 21 calls in quick succession for a single sample.
  *
  *   - Google Gemini free: 10 RPM → one call per 6s floor. We pad to
  *     7s to avoid spiking right at the edge. Without this, the first
@@ -31,11 +31,20 @@ const V2_PROMPTS_BY_ID = new Map<string, AnchorV2Prompt>(
  *   - Groq free: generous RPM, the binding constraint is TPD. Keep
  *     pacing fast.
  *   - OpenRouter free: variable by route, modest pacing is safe.
+ *   - Mistral free Experiment: ~2 req/s account-wide. 600ms keeps
+ *     us comfortably under that even with the rater on Groq, since
+ *     pacing is per-provider and Mistral is only one collector slot.
+ *   - SambaNova free: ~20 req/min on the larger models for the
+ *     persistent Developer tier; the trial Free tier we're on shares
+ *     the same routing, so 3.5s keeps us under 17/min for one slot
+ *     with comfortable headroom for occasional bursts.
  */
 const PROVIDER_MIN_PACING_MS: Record<Provider, number> = {
   google: 7_000,
   groq: 500,
   openrouter: 1_000,
+  mistral: 600,
+  sambanova: 3_500,
 };
 
 /**

@@ -2,6 +2,7 @@ import HeroSvg from "@/components/hero-svg";
 import PromptChart, { PromptPoint } from "@/components/prompt-chart";
 import SubscaleRadar, { RadarRow } from "@/components/subscale-radar";
 import { kpiSummary, perPromptScores, subscaleRadar, dailyNotableQuotes } from "@/lib/queries";
+import { MODEL_PANEL_VERSION } from "@/lib/models";
 
 // The dashboard reads from the live database on every request. Next.js
 // would otherwise try to pre-render at build time (no DB available) and
@@ -195,7 +196,7 @@ export default async function HomePage() {
               <Kpi
                 label="Models covered"
                 value={`${kpis?.modelsCovered ?? 0} / ${kpis?.modelsCovered ?? 0}`}
-                sub="panel_v3_free"
+                sub={MODEL_PANEL_VERSION}
               />
               <Kpi
                 label="Success rate · 7d"

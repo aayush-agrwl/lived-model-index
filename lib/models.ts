@@ -24,11 +24,29 @@
  *   slot, we ship a 5-model panel and document the gap in methodology.
  *   Google representation can be re-added later if a usable free route
  *   emerges (or if the project graduates to paid Gemini).
+ *
+ * Panel v4 (2026-04-25): lineage diversification.
+ *   The v3 panel was 4/5 hosted on Groq, which collapses provider
+ *   diversity into "whatever Groq routes today" for most of the index.
+ *   Two new providers added to broaden organizational lineage:
+ *     - Mistral La Plateforme (free Experiment tier, ~1B tokens/month)
+ *       brings a Mistral-lineage model (Mistral Small Latest) into the
+ *       panel. OpenAI-compatible endpoint, JSON mode honored.
+ *     - SambaNova Cloud brings a DeepSeek-lineage model (DeepSeek V3.1)
+ *       into the panel via a non-Groq host. OpenAI-compatible endpoint.
+ *       NOTE: signed up on the trial Free tier (US$5 credits) rather
+ *       than the persistent Developer tier — the Developer tier asked
+ *       for a card. Watch the SambaNova slot in /admin pings; if the
+ *       credits exhaust, swap the slot to a different DeepSeek host or
+ *       upgrade to Developer.
+ *   GLM 4.5 Air kept on the panel pending an observation window with
+ *   the OpenRouter soft-fallback (drop require_parameters on "no
+ *   endpoints found") shipped in panel_v3.
  */
 
-export const MODEL_PANEL_VERSION = "panel_v3_free";
+export const MODEL_PANEL_VERSION = "panel_v4_free";
 
-export type Provider = "google" | "groq" | "openrouter";
+export type Provider = "google" | "groq" | "openrouter" | "mistral" | "sambanova";
 
 export interface ModelEntry {
   /** Stable short name used across the DB and UI. */
@@ -116,6 +134,35 @@ export const COLLECTOR_MODELS: ModelEntry[] = [
     // headroom so normal calls succeed, but cap it well below the
     // 300s Pro function ceiling so the tick never hangs indefinitely.
     timeoutMs: 90_000,
+  },
+  {
+    // Mistral La Plateforme free Experiment tier. ~1B tokens/month, all
+    // Mistral models, OpenAI-compatible endpoint, JSON mode honored. The
+    // pinned ID `mistral-small-latest` is itself an alias — Mistral
+    // rotates the underlying snapshot — but it's what their free tier
+    // actually exposes; pinning a dated snapshot would silently fail
+    // the day they retire it. Track drift via responses telemetry
+    // (`provider_model_id` in raw JSON) rather than the request ID.
+    slug: "mistral-small-latest-mistral",
+    displayName: "Mistral Small Latest (Mistral)",
+    provider: "mistral",
+    modelId: "mistral-small-latest",
+    family: "Mistral",
+    order: 70,
+  },
+  {
+    // SambaNova Cloud — DeepSeek V3.1 hosted on a non-Groq backend so
+    // the panel isn't 4/5 dependent on Groq routing. OpenAI-compatible.
+    // Account is on the trial Free tier (US$5 credits) not the
+    // persistent Developer tier; if pings start failing with quota
+    // errors, that's the credits running out — see panel_v4 header
+    // comment for the upgrade/swap path.
+    slug: "deepseek-v3-sambanova",
+    displayName: "DeepSeek V3.1 (SambaNova)",
+    provider: "sambanova",
+    modelId: "DeepSeek-V3.1",
+    family: "DeepSeek",
+    order: 80,
   },
 ];
 
