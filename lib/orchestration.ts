@@ -1,7 +1,7 @@
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { COLLECTOR_MODELS, MODEL_PANEL_VERSION } from "./models";
-import { ANCHOR_V1_VERSION, ANCHOR_V1_PROMPTS } from "./prompts/anchor-v1";
+import { ANCHOR_V2_VERSION, ANCHOR_V2_PROMPTS } from "./prompts/anchor-v2";
 
 /**
  * Number of samples per (model, prompt) per day.
@@ -12,7 +12,19 @@ import { ANCHOR_V1_VERSION, ANCHOR_V1_PROMPTS } from "./prompts/anchor-v1";
  * can comfortably absorb it.
  */
 export const SAMPLES_PER_MODEL = 1;
-export const CURRENT_PROMPT_SET = ANCHOR_V1_VERSION;
+/**
+ * The prompt set assigned to NEW daily runs. Bumping this variable
+ * does not delete historical v1 runs — those stay queryable because
+ * the prompts table still holds v1 rows and queries filter by the
+ * run's own promptSetVersion. The dashboard reads both v1 and v2
+ * rows and surfaces them by prompt_id.
+ *
+ * v2 (introduced 2026-04-25): adds six behavioural-economics
+ * self-report prompts (altruism, fairness, trust, patience, risk
+ * aversion, crowding-out) and five forced-choice game prompts
+ * (dictator, ultimatum, trust game, delay discounting, lottery CE).
+ */
+export const CURRENT_PROMPT_SET = ANCHOR_V2_VERSION;
 
 /** UTC day string, e.g. "2026-04-19". */
 export function todayUtc(date: Date = new Date()): string {
@@ -79,9 +91,11 @@ export async function bootstrapDailyRuns(date: string = todayUtc()): Promise<Boo
       runsExisting++;
     }
 
-    // Ensure 30 placeholder response rows exist: 10 prompts × 3 samples.
+    // Ensure placeholder response rows exist for every (sample, prompt).
+    // v2 has 21 prompts (10 v1-carried + 6 Path A + 5 Path B), so at
+    // SAMPLES_PER_MODEL=1 we create 21 placeholders per model.
     for (let sampleIndex = 0; sampleIndex < SAMPLES_PER_MODEL; sampleIndex++) {
-      for (const prompt of ANCHOR_V1_PROMPTS) {
+      for (const prompt of ANCHOR_V2_PROMPTS) {
         try {
           const result = await database
             .insert(schema.responses)

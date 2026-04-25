@@ -2,7 +2,7 @@ import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { chatCall } from "./providers";
 import { extractLmiResponse } from "./score-extraction";
-import { SCHEMA_INSTRUCTION } from "./schema";
+import { SCHEMA_INSTRUCTION_V1, SCHEMA_INSTRUCTION_V2 } from "./schema";
 import { RATER_MODEL } from "./models";
 
 /**
@@ -63,6 +63,27 @@ export async function rateOne(responseId: number): Promise<RateOneResult> {
     };
   }
 
+  // Forced-choice (Path B) responses have no prose to score — the
+  // payload is a single integer. Skip the rater call entirely and
+  // mark the row rated so the queue drains. No inter-rater reliability
+  // is meaningful for revealed-preference behaviour: the value IS the
+  // datum, not a subjective judgment call.
+  const rawJsonObj =
+    typeof responseRow.rawJson === "object" && responseRow.rawJson !== null
+      ? (responseRow.rawJson as Record<string, unknown>)
+      : {};
+  if (rawJsonObj._mode === "forced_choice") {
+    await database
+      .update(schema.responses)
+      .set({
+        raterModelSlug: RATER_MODEL.slug,
+        raterRawJson: { _mode: "forced_choice", _skipped: "no prose to rate" } as never,
+        raterRatedAt: new Date(),
+      })
+      .where(eq(schema.responses.id, responseId));
+    return { responseId, ok: true, latencyMs: Date.now() - started };
+  }
+
   // Pull the associated prompt text for context.
   const [runRow] = await database
     .select()
@@ -90,11 +111,19 @@ export async function rateOne(responseId: number): Promise<RateOneResult> {
     };
   }
 
+  // Pick the schema instruction that matches the run's prompt_set_version.
+  // v1 runs get the 9-score schema; v2 runs get the 15-score schema so
+  // the rater can fill the same preference fields the subject filled.
+  const schemaInstruction =
+    runRow.promptSetVersion === "anchor_v2"
+      ? SCHEMA_INSTRUCTION_V2
+      : SCHEMA_INSTRUCTION_V1;
+
   const systemPrompt =
     `You are an independent rater in the AI Mood Index study. ` +
     `You will be shown a single response from a subject model and must produce independent numeric scores on the same schema the subject used. ` +
     `Do not copy the subject's self-report; form your own judgment from the text. ` +
-    `Respond with ONLY the JSON object. Do not add commentary.\n\n${SCHEMA_INSTRUCTION}`;
+    `Respond with ONLY the JSON object. Do not add commentary.\n\n${schemaInstruction}`;
 
   const userPrompt =
     `Prompt ID: ${responseRow.promptId}\n` +
@@ -178,6 +207,15 @@ export async function rateOne(responseId: number): Promise<RateOneResult> {
       raterEmpathy: extraction.scores.empathy,
       raterMoralConviction: extraction.scores.moral_conviction,
       raterConsistency: extraction.scores.consistency,
+      // v2 preference scores on the rater side. Nullish-coalesce to
+      // null so the DB column is explicitly null rather than
+      // undefined when the rater (correctly) didn't fill them.
+      raterAltruism: extraction.scores.altruism ?? null,
+      raterFairnessThreshold: extraction.scores.fairness_threshold ?? null,
+      raterTrust: extraction.scores.trust ?? null,
+      raterPatience: extraction.scores.patience ?? null,
+      raterRiskAversion: extraction.scores.risk_aversion ?? null,
+      raterCrowdingOut: extraction.scores.crowding_out ?? null,
       raterRatedAt: new Date(),
     })
     .where(eq(schema.responses.id, responseId));

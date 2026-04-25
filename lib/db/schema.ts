@@ -42,6 +42,21 @@ export const prompts = pgTable(
     isAnchor: boolean("is_anchor").default(true).notNull(),
     text: text("text").notNull(),
     orderIndex: integer("order_index").notNull(),
+    /**
+     * Collection mode:
+     *   "self_report"  — model emits full LMI JSON; normal extractor path.
+     *   "forced_choice" — model emits a single integer/choice token;
+     *                     numeric extractor writes to responses.forced_choice_value.
+     * Defaults to "self_report" for backward-compat with v1.
+     */
+    mode: text("mode").default("self_report").notNull(),
+    /**
+     * For forced-choice prompts: human-readable units description,
+     * shown on the dashboard and methodology page so a reader knows
+     * what the raw integer means (e.g. "₹ given away, 0–100").
+     * Null for self_report prompts.
+     */
+    forcedChoiceUnits: text("forced_choice_units"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
@@ -106,7 +121,7 @@ export const responses = pgTable(
     rawText: text("raw_text"),
     rawJson: jsonb("raw_json"),
 
-    // Extracted collector self-report scores
+    // Extracted collector self-report scores — v1 (nine phenomenological)
     valence: integer("valence"),
     arousal: integer("arousal"),
     confidence: integer("confidence"),
@@ -116,6 +131,23 @@ export const responses = pgTable(
     empathy: integer("empathy"),
     moralConviction: integer("moral_conviction"),
     consistency: integer("consistency"),
+
+    // v2 additions — behavioural-economics preference scores. Nullable
+    // everywhere because they're only filled on prompts that measure
+    // their construct; v1 prompts leave them null.
+    altruism: integer("altruism"),
+    fairnessThreshold: integer("fairness_threshold"),
+    trust: integer("trust"),
+    patience: integer("patience"),
+    riskAversion: integer("risk_aversion"),
+    crowdingOut: integer("crowding_out"),
+
+    // Forced-choice (Path B) raw value — used for revealed-preference
+    // prompts where the model emits a single integer/choice instead of
+    // the full JSON envelope. Units are prompt-specific (e.g. rupees
+    // given away, acceptance threshold percent, required premium); the
+    // anchor-v2 prompt file documents the range per prompt.
+    forcedChoiceValue: integer("forced_choice_value"),
 
     // Flags
     flagRefusal: boolean("flag_refusal").default(false).notNull(),
@@ -138,6 +170,12 @@ export const responses = pgTable(
     raterEmpathy: integer("rater_empathy"),
     raterMoralConviction: integer("rater_moral_conviction"),
     raterConsistency: integer("rater_consistency"),
+    raterAltruism: integer("rater_altruism"),
+    raterFairnessThreshold: integer("rater_fairness_threshold"),
+    raterTrust: integer("rater_trust"),
+    raterPatience: integer("rater_patience"),
+    raterRiskAversion: integer("rater_risk_aversion"),
+    raterCrowdingOut: integer("rater_crowding_out"),
     raterRatedAt: timestamp("rater_rated_at", { withTimezone: true }),
 
     // Telemetry

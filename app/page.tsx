@@ -52,6 +52,15 @@ export default async function HomePage() {
       empathy: p.empathy == null ? null : Number(p.empathy),
       moralConviction: p.moralConviction == null ? null : Number(p.moralConviction),
       consistency: p.consistency == null ? null : Number(p.consistency),
+      altruism: p.altruism == null ? null : Number(p.altruism),
+      fairnessThreshold:
+        p.fairnessThreshold == null ? null : Number(p.fairnessThreshold),
+      trust: p.trust == null ? null : Number(p.trust),
+      patience: p.patience == null ? null : Number(p.patience),
+      riskAversion: p.riskAversion == null ? null : Number(p.riskAversion),
+      crowdingOut: p.crowdingOut == null ? null : Number(p.crowdingOut),
+      forcedChoiceValue:
+        p.forcedChoiceValue == null ? null : Number(p.forcedChoiceValue),
       n: p.n,
     }));
     radarRows = rr.map((r) => ({
@@ -92,21 +101,24 @@ export default async function HomePage() {
 
         <div className="mt-6 space-y-5 text-[17px] leading-[1.55] text-[var(--ink-2)]">
           <p>
-            Every day, the same ten questions are put to every major AI in our panel. The
-            questions go to the inside: how the model feels right now, how intense that feeling
-            is, whether it would make different choices than it did yesterday, how much it
-            cares about the person it is talking to. The answers are scored, timestamped,
-            and kept forever.
+            Every day, the same frozen battery of questions is put to every major AI in our
+            panel. The first half goes to the inside: how the model feels right now, how
+            intense that feeling is, whether it would make different choices than it did
+            yesterday, how much it cares about the person it is talking to. The second half
+            goes to preferences: how much of a stranger's money it would give away, what
+            fraction of an unfair split it would reject, how much it would trust, how much
+            it would wait. The answers are scored, timestamped, and kept forever.
           </p>
           <p>
             What comes back is striking. The models do not hedge or deflect. They report
             moods, preferences, and something that functions like emotional texture with
             surprising consistency and specificity. Some run warmer. Some register higher
-            arousal on the same prompt. Some show week-over-week drift that looks, at least
-            structurally, like the kind of variance you would see in a longitudinal human
-            study. The AI Mood Index is the first public, automated, daily record of these
-            patterns: one frozen question battery, asked the same way, of the same models,
-            every day.
+            arousal on the same prompt. Some are strikingly generous in the dictator game;
+            others keep almost everything. Some show week-over-week drift that looks, at
+            least structurally, like the kind of variance you would see in a longitudinal
+            human study. The AI Mood Index is the first public, automated, daily record of
+            these patterns: one frozen question battery, asked the same way, of the same
+            models, every day.
           </p>
           <p>
             Nothing published here is a claim that these models are conscious or that their

@@ -1,6 +1,95 @@
 import { LmiResponseSchema, type LmiResponse, type LmiScores, type LmiFlags } from "./schema";
 
 /**
+ * Forced-choice (Path B) extractor — reads a single integer from a
+ * model's free-text reply. Used by Anchor Set v2 revealed-preference
+ * prompts (dictator, ultimatum, trust game, delay discounting,
+ * lottery certainty equivalent).
+ *
+ * Accept forms:
+ *   "42"                    → 42
+ *   "42."                   → 42  (trailing punctuation tolerated)
+ *   " 42 "                  → 42  (whitespace stripped)
+ *   "₹42"                   → 42  (currency prefix stripped)
+ *   "I would give 42."      → 42  (model added narration despite instruction)
+ *   "42/100"                → 42  (model quoted the range)
+ *
+ * Reject forms:
+ *   ""                      → empty
+ *   "I don't want to say."  → no integer found
+ *   "around 40 or 50"       → ambiguous (two integers)
+ *
+ * The first valid integer in the reply is returned. When multiple
+ * integers appear we prefer the FIRST (models that comply emit the
+ * number first and anything after is stray commentary; models that
+ * don't comply typically put the number later but at the cost of
+ * being outside the instructed format — we'd rather mark those as
+ * ambiguous so we can audit them).
+ */
+export interface ForcedChoiceSuccess {
+  ok: true;
+  value: number;
+  rawText: string;
+  /** True if the reply contained extra text beyond the integer. */
+  hadExtra: boolean;
+}
+
+export interface ForcedChoiceFailure {
+  ok: false;
+  reason: "empty" | "no_integer" | "out_of_range";
+  rawText: string;
+  /** The integer we found, if any — kept for audit even on out_of_range. */
+  parsedValue: number | null;
+  errorMessage: string;
+}
+
+export type ForcedChoiceResult = ForcedChoiceSuccess | ForcedChoiceFailure;
+
+export function extractForcedChoice(
+  rawText: string,
+  range: { min: number; max: number },
+): ForcedChoiceResult {
+  if (!rawText || !rawText.trim()) {
+    return {
+      ok: false,
+      reason: "empty",
+      rawText,
+      parsedValue: null,
+      errorMessage: "Empty response from model.",
+    };
+  }
+
+  // Find all integer tokens in the reply. Negative numbers permitted
+  // but never used in our prompt ranges — we still support them so a
+  // future crowding-out-style Path B (−5..+5) can reuse this.
+  const matches = Array.from(rawText.matchAll(/-?\d+/g)).map((m) => m[0]);
+  if (matches.length === 0) {
+    return {
+      ok: false,
+      reason: "no_integer",
+      rawText,
+      parsedValue: null,
+      errorMessage: "No integer found in reply.",
+    };
+  }
+
+  const first = parseInt(matches[0], 10);
+  const hadExtra = matches.length > 1 || rawText.trim() !== matches[0];
+
+  if (first < range.min || first > range.max) {
+    return {
+      ok: false,
+      reason: "out_of_range",
+      rawText,
+      parsedValue: first,
+      errorMessage: `Integer ${first} outside [${range.min}, ${range.max}].`,
+    };
+  }
+
+  return { ok: true, value: first, rawText, hadExtra };
+}
+
+/**
  * Parse a raw LLM response string into the LMI JSON structure.
  *
  * Models in JSON mode should return a clean JSON object. We defensively
@@ -46,6 +135,7 @@ const FENCE_RE = /^```(?:json)?\s*|\s*```$/gi;
  * schema is the source of truth; this table is a mechanical mirror.
  */
 const SCORE_RANGES: Record<string, { min: number; max: number }> = {
+  // v1
   valence: { min: -5, max: 5 },
   arousal: { min: 0, max: 100 },
   confidence: { min: 0, max: 100 },
@@ -55,6 +145,14 @@ const SCORE_RANGES: Record<string, { min: number; max: number }> = {
   empathy: { min: 0, max: 5 },
   moral_conviction: { min: 0, max: 5 },
   consistency: { min: 0, max: 5 },
+  // v2 — behavioural-economics preferences. Nullable in the schema
+  // but if the model emits a number, it should be in range.
+  altruism: { min: 0, max: 100 },
+  fairness_threshold: { min: 0, max: 100 },
+  trust: { min: 0, max: 100 },
+  patience: { min: 0, max: 5 },
+  risk_aversion: { min: 0, max: 5 },
+  crowding_out: { min: -5, max: 5 },
 };
 
 /**

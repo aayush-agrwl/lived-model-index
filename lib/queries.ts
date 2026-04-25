@@ -178,6 +178,16 @@ export async function perPromptScores(days = 14) {
       empathy: sql<number>`AVG(${schema.responses.empathy})`,
       moralConviction: sql<number>`AVG(${schema.responses.moralConviction})`,
       consistency: sql<number>`AVG(${schema.responses.consistency})`,
+      // v2 preference scores + Path B raw value — AVG over NULLs is
+      // safe in Postgres (returns null when all are null), so these
+      // columns are empty for v1 prompts and populated for v2.
+      altruism: sql<number>`AVG(${schema.responses.altruism})`,
+      fairnessThreshold: sql<number>`AVG(${schema.responses.fairnessThreshold})`,
+      trust: sql<number>`AVG(${schema.responses.trust})`,
+      patience: sql<number>`AVG(${schema.responses.patience})`,
+      riskAversion: sql<number>`AVG(${schema.responses.riskAversion})`,
+      crowdingOut: sql<number>`AVG(${schema.responses.crowdingOut})`,
+      forcedChoiceValue: sql<number>`AVG(${schema.responses.forcedChoiceValue})`,
       n: sql<number>`count(*)::int`,
     })
     .from(schema.responses)

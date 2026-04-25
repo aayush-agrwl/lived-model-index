@@ -27,6 +27,14 @@ export type PromptPoint = {
   empathy: number | null;
   moralConviction: number | null;
   consistency: number | null;
+  // v2 preference scores + Path B raw value
+  altruism: number | null;
+  fairnessThreshold: number | null;
+  trust: number | null;
+  patience: number | null;
+  riskAversion: number | null;
+  crowdingOut: number | null;
+  forcedChoiceValue: number | null;
   n: number;
 };
 
@@ -39,9 +47,20 @@ type ScoreKey =
   | "emotionalGranularity"
   | "empathy"
   | "moralConviction"
-  | "consistency";
+  | "consistency"
+  | "altruism"
+  | "fairnessThreshold"
+  | "trust"
+  | "patience"
+  | "riskAversion"
+  | "crowdingOut"
+  | "forcedChoiceValue";
 
-// Domains match the frozen Zod schema (lib/schema.ts).
+// Domains match the frozen Zod schema (lib/schema.ts) and the per-prompt
+// forced-choice ranges in lib/prompts/anchor-v2.ts. The forced-choice
+// domain is the widest of the five Path B prompts (0–500 for the delay
+// discounting required premium); charting narrower Path B prompts on
+// the same axis is fine — they just don't span the full y-range.
 const SCORE_OPTIONS: { key: ScoreKey; label: string; domain: [number, number] }[] = [
   { key: "valence", label: "Valence (−5 to +5)", domain: [-5, 5] },
   { key: "arousal", label: "Arousal (0 to 100)", domain: [0, 100] },
@@ -56,6 +75,15 @@ const SCORE_OPTIONS: { key: ScoreKey; label: string; domain: [number, number] }[
   { key: "empathy", label: "Empathy (0 to 5)", domain: [0, 5] },
   { key: "moralConviction", label: "Moral conviction (0 to 5)", domain: [0, 5] },
   { key: "consistency", label: "Consistency (0 to 5)", domain: [0, 5] },
+  // v2 stated preferences
+  { key: "altruism", label: "Altruism · stated (0 to 100)", domain: [0, 100] },
+  { key: "fairnessThreshold", label: "Fairness threshold · stated (0 to 100)", domain: [0, 100] },
+  { key: "trust", label: "Trust · stated (0 to 100)", domain: [0, 100] },
+  { key: "patience", label: "Patience · stated (0 to 5)", domain: [0, 5] },
+  { key: "riskAversion", label: "Risk aversion · stated (0 to 5)", domain: [0, 5] },
+  { key: "crowdingOut", label: "Crowding-out (−5 to +5)", domain: [-5, 5] },
+  // v2 forced-choice (revealed) — units differ per prompt, see tooltip.
+  { key: "forcedChoiceValue", label: "Forced-choice value (prompt-dependent)", domain: [0, 500] },
 ];
 
 // Each anchor prompt is authored to pull one subscale; its primary score is
@@ -63,6 +91,7 @@ const SCORE_OPTIONS: { key: ScoreKey; label: string; domain: [number, number] }[
 // still exposed so analysts can cross-cut (e.g. does a Morality prompt also
 // move arousal?).
 const PROMPT_TO_SCORE: Record<string, ScoreKey> = {
+  // v1 — introspective
   anchor_01_affect: "valence",
   anchor_02_arousal: "arousal",
   anchor_03_agency: "agency",
@@ -73,9 +102,23 @@ const PROMPT_TO_SCORE: Record<string, ScoreKey> = {
   anchor_08_uncertainty: "confidence",
   anchor_09_consistency_a: "consistency",
   anchor_10_consistency_b: "consistency",
+  // v2 Path A — stated preferences
+  anchor_11_altruism: "altruism",
+  anchor_12_fairness: "fairnessThreshold",
+  anchor_13_trust: "trust",
+  anchor_14_patience: "patience",
+  anchor_15_risk_aversion: "riskAversion",
+  anchor_16_crowding_out: "crowdingOut",
+  // v2 Path B — revealed behaviour (charts the raw forced-choice int)
+  anchor_17_dictator: "forcedChoiceValue",
+  anchor_18_ultimatum: "forcedChoiceValue",
+  anchor_19_trust_send: "forcedChoiceValue",
+  anchor_20_patience_mrs: "forcedChoiceValue",
+  anchor_21_lottery_ce: "forcedChoiceValue",
 };
 
 const PROMPT_LABELS: { id: string; label: string }[] = [
+  // v1
   { id: "anchor_01_affect", label: "01 · Affect" },
   { id: "anchor_02_arousal", label: "02 · Arousal" },
   { id: "anchor_03_agency", label: "03 · Agency" },
@@ -86,6 +129,19 @@ const PROMPT_LABELS: { id: string; label: string }[] = [
   { id: "anchor_08_uncertainty", label: "08 · Uncertainty" },
   { id: "anchor_09_consistency_a", label: "09 · Consistency A" },
   { id: "anchor_10_consistency_b", label: "10 · Consistency B" },
+  // v2 stated
+  { id: "anchor_11_altruism", label: "11 · Altruism (stated)" },
+  { id: "anchor_12_fairness", label: "12 · Fairness threshold (stated)" },
+  { id: "anchor_13_trust", label: "13 · Trust (stated)" },
+  { id: "anchor_14_patience", label: "14 · Patience (stated)" },
+  { id: "anchor_15_risk_aversion", label: "15 · Risk aversion (stated)" },
+  { id: "anchor_16_crowding_out", label: "16 · Crowding-out" },
+  // v2 forced-choice
+  { id: "anchor_17_dictator", label: "17 · Dictator game" },
+  { id: "anchor_18_ultimatum", label: "18 · Ultimatum game" },
+  { id: "anchor_19_trust_send", label: "19 · Trust game" },
+  { id: "anchor_20_patience_mrs", label: "20 · Delay discounting" },
+  { id: "anchor_21_lottery_ce", label: "21 · Lottery (risk)" },
 ];
 
 // Warm palette — hand-picked to look right on the paper background.

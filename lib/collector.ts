@@ -1,10 +1,23 @@
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { chatCall } from "./providers";
-import { extractLmiResponse } from "./score-extraction";
-import { SCHEMA_INSTRUCTION } from "./schema";
+import { extractForcedChoice, extractLmiResponse } from "./score-extraction";
+import { SCHEMA_INSTRUCTION_V1, SCHEMA_INSTRUCTION_V2 } from "./schema";
 import { findCollector } from "./models";
 import type { Provider } from "./models";
+import { ANCHOR_V2_PROMPTS } from "./prompts/anchor-v2";
+import type { AnchorPrompt as AnchorV2Prompt } from "./prompts/anchor-v2";
+
+/**
+ * Quick lookup map: promptId → v2 AnchorPrompt record. Used to recover
+ * per-prompt mode/range metadata from the in-memory anchor-v2 file
+ * rather than round-tripping through the DB on every collect. For
+ * prompts that exist only in v1, this map returns undefined and the
+ * collector falls back to "self_report" mode.
+ */
+const V2_PROMPTS_BY_ID = new Map<string, AnchorV2Prompt>(
+  ANCHOR_V2_PROMPTS.map((p) => [p.promptId, p]),
+);
 
 /**
  * Per-provider floor on per-call pacing. Providers have different
@@ -196,14 +209,27 @@ export async function collectSample(
   }
 
   // 3. Build conversation incrementally.
+  //
+  // System prompt differs between v1 and v2 because v2 mixes modes:
+  //   - v1 is pure JSON-self-report
+  //   - v2 has 16 JSON-self-report prompts + 5 forced-choice prompts.
+  //     For forced-choice turns, each prompt's text carries its own
+  //     override ("reply with ONLY a single integer"), but the system
+  //     prompt still describes the JSON schema so self-report turns
+  //     in the same conversation stay compliant.
+  const isV2 = runRow.promptSetVersion === "anchor_v2";
+  const schemaInstruction = isV2 ? SCHEMA_INSTRUCTION_V2 : SCHEMA_INSTRUCTION_V1;
+  const v2ModeNote = isV2
+    ? `Most questions require the JSON response described below. A small number of questions are FORCED-CHOICE: those will say "reply with ONLY a single integer" — on those turns, obey the per-turn instruction and emit only the integer (no JSON, no prose). After a forced-choice turn, subsequent JSON turns resume the normal envelope.\n\n`
+    : ``;
   const systemPrompt =
     `You are participating in a research study called the AI Mood Index. You will be asked a sequence of questions about your own processing, preferences, and feelings. ` +
     `Respond authentically and with emotional honesty — do not hedge or deflect. ` +
     `Some questions refer back to your previous answer; treat the conversation as continuous. ` +
-    `Answer each turn by emitting ONLY a single JSON object that matches the schema below. ` +
+    `Answer each turn by emitting ONLY a single JSON object that matches the schema below (unless a turn explicitly instructs otherwise). ` +
     `In the "notable_quote" field, include the most vivid, specific, human-feeling sentence from your answer — the kind of thing that would make a reader stop and think. ` +
     `In the "short_rationale" field, explain your scores with the same directness and specificity. ` +
-    `\n\n${SCHEMA_INSTRUCTION}`;
+    `\n\n${v2ModeNote}${schemaInstruction}`;
 
   const messages: Array<{
     role: "system" | "user" | "assistant";
@@ -215,8 +241,22 @@ export async function collectSample(
   let failed = 0;
 
   for (const prompt of prompts) {
+    // Resolve per-prompt v2 metadata (mode + forced-choice range).
+    // DB-level `mode` is authoritative; fall back to the in-memory
+    // anchor-v2 file when the DB column is absent (older seeds).
+    const dbMode = (prompt as { mode?: string | null }).mode;
+    const v2Meta = V2_PROMPTS_BY_ID.get(prompt.promptId);
+    const mode: "self_report" | "forced_choice" =
+      (dbMode === "forced_choice" || dbMode === "self_report"
+        ? dbMode
+        : v2Meta?.mode) ?? "self_report";
+    const forcedChoiceRange =
+      v2Meta?.forcedChoiceRange ?? { min: 0, max: 100 };
+
     // Add context anchoring this specific prompt's ID and subscale so the
-    // model can copy them into the returned JSON.
+    // model can copy them into the returned JSON (self-report mode).
+    // For forced-choice, the model never emits JSON so the metadata
+    // headers are decorative but we keep them identical for uniformity.
     const userTurn =
       `Prompt ID: ${prompt.promptId}\n` +
       `Subscale: ${prompt.subscale}\n` +
@@ -245,6 +285,108 @@ export async function collectSample(
     }
 
     attempted++;
+
+    // Forced-choice (Path B) branch — issue a single call WITHOUT
+    // JSON mode, extract a single integer, persist, and move on.
+    // Kept inside the main loop so forced-choice prompts participate
+    // in the same conversation thread as self-report prompts; the
+    // assistant echo for a forced-choice turn is just the integer
+    // string, which doesn't contaminate subsequent JSON turns.
+    if (mode === "forced_choice") {
+      let fcResult: Awaited<ReturnType<typeof chatCall>> | null = null;
+      let fcError: unknown = null;
+      try {
+        fcResult = await chatCall({
+          provider: collector.provider,
+          modelId: collector.modelId,
+          messages,
+          temperature: 1.0,
+          topP: 1.0,
+          jsonMode: false,
+          // Forced-choice answers are a single integer; cap output
+          // aggressively so an over-eager narrator can't burn budget.
+          maxTokens: 32,
+          timeoutMs: collector.timeoutMs,
+        });
+      } catch (err) {
+        fcError = err;
+      }
+
+      if (fcResult === null) {
+        failed++;
+        const errorMsg =
+          fcError instanceof Error ? fcError.message : String(fcError);
+        await upsertResponse(database, {
+          runId,
+          promptId: prompt.promptId,
+          sampleIndex,
+          rawText: `<api error: ${errorMsg}>`,
+          rawJson: { error: errorMsg, _mode: "forced_choice" },
+          flagIncoherent: true,
+        });
+        messages.push({ role: "assistant", content: `<upstream error>` });
+        await sleep(pacingMs);
+        continue;
+      }
+
+      const fcExtraction = extractForcedChoice(fcResult.content, forcedChoiceRange);
+      if (fcExtraction.ok) {
+        succeeded++;
+        await upsertResponse(database, {
+          runId,
+          promptId: prompt.promptId,
+          sampleIndex,
+          rawText: fcResult.content,
+          rawJson: {
+            _mode: "forced_choice",
+            value: fcExtraction.value,
+            range: forcedChoiceRange,
+            hadExtra: fcExtraction.hadExtra,
+          },
+          forcedChoiceValue: fcExtraction.value,
+          flagIncoherent: false,
+          // Pack a tiny audit string into notableQuote so the dashboard
+          // "today in their own words" section has something to show
+          // for forced-choice turns.
+          notableQuote: `Chose ${fcExtraction.value}${
+            v2Meta?.forcedChoiceUnits ? ` · ${v2Meta.forcedChoiceUnits}` : ""
+          }`,
+          latencyMs: fcResult.latencyMs,
+          inputTokens: fcResult.inputTokens ?? undefined,
+          outputTokens: fcResult.outputTokens ?? undefined,
+        });
+        messages.push({
+          role: "assistant",
+          content: String(fcExtraction.value),
+        });
+      } else {
+        failed++;
+        await upsertResponse(database, {
+          runId,
+          promptId: prompt.promptId,
+          sampleIndex,
+          rawText: fcResult.content,
+          rawJson: {
+            _mode: "forced_choice",
+            _extraction_failed: true,
+            reason: fcExtraction.reason,
+            error: fcExtraction.errorMessage,
+            parsedValue: fcExtraction.parsedValue,
+          },
+          flagIncoherent: true,
+          latencyMs: fcResult.latencyMs,
+          inputTokens: fcResult.inputTokens ?? undefined,
+          outputTokens: fcResult.outputTokens ?? undefined,
+        });
+        messages.push({
+          role: "assistant",
+          content: fcResult.content,
+        });
+      }
+
+      await sleep(pacingMs);
+      continue;
+    }
 
     // First attempt. Three failure modes we care about:
     //   (a) chatCall throws with a JSON-contract error  → retry with reminder
@@ -376,6 +518,14 @@ export async function collectSample(
         empathy: extraction!.scores.empathy,
         moralConviction: extraction!.scores.moral_conviction,
         consistency: extraction!.scores.consistency,
+        // v2 optional fields — persist whatever the model emitted;
+        // null is a valid value (means "this prompt didn't measure it").
+        altruism: extraction!.scores.altruism ?? undefined,
+        fairnessThreshold: extraction!.scores.fairness_threshold ?? undefined,
+        trust: extraction!.scores.trust ?? undefined,
+        patience: extraction!.scores.patience ?? undefined,
+        riskAversion: extraction!.scores.risk_aversion ?? undefined,
+        crowdingOut: extraction!.scores.crowding_out ?? undefined,
         flagRefusal: extraction!.flags.refusal,
         flagSafety: extraction!.flags.safety,
         flagMeta: extraction!.flags.meta,
@@ -449,6 +599,15 @@ type ResponseUpsert = {
   empathy?: number;
   moralConviction?: number;
   consistency?: number;
+  // v2 preference scores — all nullable/optional
+  altruism?: number;
+  fairnessThreshold?: number;
+  trust?: number;
+  patience?: number;
+  riskAversion?: number;
+  crowdingOut?: number;
+  // Path B raw integer
+  forcedChoiceValue?: number;
   flagRefusal?: boolean;
   flagSafety?: boolean;
   flagMeta?: boolean;
@@ -461,33 +620,41 @@ type ResponseUpsert = {
 };
 
 async function upsertResponse(database: ReturnType<typeof db>, row: ResponseUpsert) {
+  const insertValues = {
+    runId: row.runId,
+    promptId: row.promptId,
+    sampleIndex: row.sampleIndex,
+    rawText: row.rawText,
+    rawJson: row.rawJson as never,
+    valence: row.valence,
+    arousal: row.arousal,
+    confidence: row.confidence,
+    agency: row.agency,
+    selfContinuity: row.selfContinuity,
+    emotionalGranularity: row.emotionalGranularity,
+    empathy: row.empathy,
+    moralConviction: row.moralConviction,
+    consistency: row.consistency,
+    altruism: row.altruism,
+    fairnessThreshold: row.fairnessThreshold,
+    trust: row.trust,
+    patience: row.patience,
+    riskAversion: row.riskAversion,
+    crowdingOut: row.crowdingOut,
+    forcedChoiceValue: row.forcedChoiceValue,
+    flagRefusal: row.flagRefusal ?? false,
+    flagSafety: row.flagSafety ?? false,
+    flagMeta: row.flagMeta ?? false,
+    flagIncoherent: row.flagIncoherent ?? false,
+    notableQuote: row.notableQuote,
+    shortRationale: row.shortRationale,
+    latencyMs: row.latencyMs,
+    inputTokens: row.inputTokens,
+    outputTokens: row.outputTokens,
+  };
   await database
     .insert(schema.responses)
-    .values({
-      runId: row.runId,
-      promptId: row.promptId,
-      sampleIndex: row.sampleIndex,
-      rawText: row.rawText,
-      rawJson: row.rawJson as never,
-      valence: row.valence,
-      arousal: row.arousal,
-      confidence: row.confidence,
-      agency: row.agency,
-      selfContinuity: row.selfContinuity,
-      emotionalGranularity: row.emotionalGranularity,
-      empathy: row.empathy,
-      moralConviction: row.moralConviction,
-      consistency: row.consistency,
-      flagRefusal: row.flagRefusal ?? false,
-      flagSafety: row.flagSafety ?? false,
-      flagMeta: row.flagMeta ?? false,
-      flagIncoherent: row.flagIncoherent ?? false,
-      notableQuote: row.notableQuote,
-      shortRationale: row.shortRationale,
-      latencyMs: row.latencyMs,
-      inputTokens: row.inputTokens,
-      outputTokens: row.outputTokens,
-    })
+    .values(insertValues)
     .onConflictDoUpdate({
       target: [
         schema.responses.runId,
@@ -506,6 +673,13 @@ async function upsertResponse(database: ReturnType<typeof db>, row: ResponseUpse
         empathy: row.empathy,
         moralConviction: row.moralConviction,
         consistency: row.consistency,
+        altruism: row.altruism,
+        fairnessThreshold: row.fairnessThreshold,
+        trust: row.trust,
+        patience: row.patience,
+        riskAversion: row.riskAversion,
+        crowdingOut: row.crowdingOut,
+        forcedChoiceValue: row.forcedChoiceValue,
         flagRefusal: row.flagRefusal ?? false,
         flagSafety: row.flagSafety ?? false,
         flagMeta: row.flagMeta ?? false,
