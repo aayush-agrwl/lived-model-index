@@ -21,18 +21,38 @@ export default async function HomePage() {
   let radarRows: RadarRow[] = [];
   let quotes: Awaited<ReturnType<typeof dailyNotableQuotes>> = [];
   let dbError: string | null = null;
+  // Per-query failures we want to surface as a non-fatal banner, not as
+  // an empty chart with no explanation. The most common case in
+  // practice is a missing v2 column — db:push hasn't been applied yet —
+  // which makes any query that AVGs the new score fields throw.
+  let queryWarnings: string[] = [];
+
+  function recordWarning(label: string, err: unknown): never[] {
+    const msg = err instanceof Error ? err.message : String(err);
+    queryWarnings.push(`${label}: ${msg}`);
+    return [];
+  }
 
   try {
     const [k, pp, rr, q] = await Promise.all([
       kpiSummary(),
       perPromptScores(14).catch(
-        () => [] as Awaited<ReturnType<typeof perPromptScores>>,
+        (e) =>
+          recordWarning("perPromptScores", e) as Awaited<
+            ReturnType<typeof perPromptScores>
+          >,
       ),
       subscaleRadar(7).catch(
-        () => [] as Awaited<ReturnType<typeof subscaleRadar>>,
+        (e) =>
+          recordWarning("subscaleRadar", e) as Awaited<
+            ReturnType<typeof subscaleRadar>
+          >,
       ),
       dailyNotableQuotes().catch(
-        () => [] as Awaited<ReturnType<typeof dailyNotableQuotes>>,
+        (e) =>
+          recordWarning("dailyNotableQuotes", e) as Awaited<
+            ReturnType<typeof dailyNotableQuotes>
+          >,
       ),
     ]);
     kpis = k;
@@ -146,6 +166,26 @@ export default async function HomePage() {
           </section>
         ) : (
           <>
+            {queryWarnings.length > 0 ? (
+              <section className="rounded-sm border border-amber-500/40 bg-amber-500/5 p-5">
+                <h2 className="label-caps text-amber-800 dark:text-amber-300">
+                  Schema drift detected
+                </h2>
+                <p className="mt-2 text-sm text-[var(--ink-2)]">
+                  Some queries failed. The most common cause is a missing v2
+                  column — run <code className="text-xs">npm run db:push</code>{" "}
+                  to apply the latest <code>lib/db/schema.ts</code> to the live
+                  database. Underlying errors:
+                </p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-[var(--muted)]">
+                  {queryWarnings.map((w, i) => (
+                    <li key={i}>
+                      <code className="text-[11px]">{w}</code>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
             <section className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <Kpi
                 label="Last run"

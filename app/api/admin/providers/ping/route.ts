@@ -34,6 +34,8 @@ interface PingResult {
 }
 
 async function pingOne(model: ModelEntry): Promise<PingResult> {
+  // First attempt: strict JSON mode. This is the canonical pipeline path.
+  let firstErr: unknown = null;
   try {
     const result = await chatCall({
       provider: model.provider,
@@ -66,6 +68,44 @@ async function pingOne(model: ModelEntry): Promise<PingResult> {
       error: validJson ? null : "response was not valid JSON",
     };
   } catch (err) {
+    firstErr = err;
+  }
+
+  // Fallback: drop JSON mode and ask for plain text. This catches the
+  // OpenRouter free-tier case where `require_parameters: true` plus
+  // `response_format: json_object` filters out every backend for a model
+  // that is otherwise reachable. A successful plain-text reply tells us
+  // the provider key works and the route exists; we report it as "ok"
+  // but flag validJson=false so the operator knows JSON-mode is broken
+  // for this slot specifically.
+  try {
+    const result = await chatCall({
+      provider: model.provider,
+      modelId: model.modelId,
+      messages: [{ role: "user", content: "Reply with the single word: pong" }],
+      temperature: 0.0,
+      topP: 1.0,
+      jsonMode: false,
+      maxTokens: 16,
+    });
+    const reachable = result.content.trim().length > 0;
+    return {
+      modelSlug: model.slug,
+      modelDisplayName: model.displayName,
+      provider: model.provider,
+      modelId: model.modelId,
+      ok: reachable,
+      validJson: false,
+      latencyMs: result.latencyMs,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      content: result.content.slice(0, 200),
+      error: reachable
+        ? `reachable, but JSON mode failed: ${firstErr instanceof Error ? firstErr.message : String(firstErr)}`
+        : "empty response in plain-text fallback",
+    };
+  } catch (err) {
+    // Both attempts failed — the slot is genuinely unreachable.
     return {
       modelSlug: model.slug,
       modelDisplayName: model.displayName,
@@ -77,7 +117,7 @@ async function pingOne(model: ModelEntry): Promise<PingResult> {
       inputTokens: null,
       outputTokens: null,
       content: null,
-      error: err instanceof Error ? err.message : String(err),
+      error: `JSON mode: ${firstErr instanceof Error ? firstErr.message : String(firstErr)} · plain text: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
 }

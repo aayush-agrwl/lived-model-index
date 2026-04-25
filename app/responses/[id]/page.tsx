@@ -30,11 +30,25 @@ export default async function ResponseDetailPage({ params }: Params) {
   }
 
   if (dbError) {
+    const looksLikeMissingColumn = /column\s+"?\w+"?\s+does not exist/i.test(
+      dbError,
+    );
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-semibold">Response #{id}</h1>
         <div className="rounded-lg border border-[var(--border)] p-5 text-sm">
-          Database not yet reachable: <code className="text-xs">{dbError}</code>.
+          <p>
+            Database read failed:{" "}
+            <code className="text-xs">{dbError}</code>
+          </p>
+          {looksLikeMissingColumn ? (
+            <p className="mt-3 text-[var(--muted)]">
+              This usually means <code>lib/db/schema.ts</code> is ahead of the
+              live database. Run <code>npm run db:push</code> from the project
+              root against the production <code>DATABASE_URL</code> to apply
+              the new columns. Existing rows are preserved.
+            </p>
+          ) : null}
         </div>
       </div>
     );

@@ -15,11 +15,12 @@ import { useEffect, useState } from "react";
 
 type PingResult = {
   ok: boolean;
+  validJson?: boolean;
   modelSlug: string;
   modelDisplayName: string;
   provider: string;
   latencyMs: number | null;
-  error?: string;
+  error?: string | null;
 };
 
 interface PingResponse {
@@ -157,24 +158,35 @@ export default function AdminPage() {
               <tbody>
                 {ping.results.map((r) => (
                   <tr key={r.modelSlug} className="border-t border-[var(--border)]">
-                    <td className="px-3 py-2">{r.modelDisplayName}</td>
-                    <td className="px-3 py-2 capitalize">{r.provider}</td>
-                    <td className="px-3 py-2 font-mono text-xs">
+                    <td className="px-3 py-2 align-top">{r.modelDisplayName}</td>
+                    <td className="px-3 py-2 align-top capitalize">{r.provider}</td>
+                    <td className="px-3 py-2 align-top font-mono text-xs">
                       {r.latencyMs != null ? `${r.latencyMs} ms` : "—"}
                     </td>
-                    <td className="px-3 py-2">
-                      {r.ok ? (
-                        <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                          ok
-                        </span>
-                      ) : (
-                        <span
-                          className="rounded bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400"
-                          title={r.error}
-                        >
-                          fail
-                        </span>
-                      )}
+                    <td className="px-3 py-2 align-top">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          {r.ok ? (
+                            <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                              ok
+                            </span>
+                          ) : (
+                            <span className="rounded bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
+                              fail
+                            </span>
+                          )}
+                          {r.ok && r.validJson === false ? (
+                            <span className="rounded bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                              JSON mode broken
+                            </span>
+                          ) : null}
+                        </div>
+                        {r.error ? (
+                          <span className="break-all font-mono text-[11px] text-[var(--muted)]">
+                            {r.error}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
