@@ -1,13 +1,20 @@
 name: AMI — Tick (drain the work queue)
 
-# Runs every 10 minutes between 01:00 and 06:00 UTC, draining the
+# Runs every 10 minutes between 01:00 and 12:00 UTC, draining the
 # collect+rate queue. Outside this window it's a no-op (tick returns
 # quickly when there's no work).
+#
+# Window sizing: with 7 models in the panel and the slowest one (GLM
+# 4.5 Air) needing ~4-5 ticks to finish a 21-prompt sample, an 11-hour
+# window gives enough headroom for the round-robin scheduler to drain
+# every model on a normal day, plus slack for retries on bad days. The
+# old 5-hour window was too tight: it produced partial days where the
+# tail-end models (Mistral, SambaNova) never got reached at all.
 #
 # Why this pattern: GitHub Actions free tier supports arbitrary cron
 # schedules, unlike Vercel Hobby Cron which is limited to once per day
 # per job. This workflow plus the /api/cron/tick endpoint gives us the
-# chunked processing we need to fit inside Vercel's 60s function limit.
+# chunked processing we need to fit inside Vercel's 300s function limit.
 #
 # ⚠️  IMPORTANT — SITE_URL must equal your Vercel production URL, e.g.:
 #       https://ai-mood-index.vercel.app
@@ -17,7 +24,7 @@ name: AMI — Tick (drain the work queue)
 
 on:
   schedule:
-    - cron: "*/10 1-6 * * *"
+    - cron: "*/10 1-11 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -41,11 +48,20 @@ jobs:
           SITE_URL: ${{ secrets.SITE_URL }}
 
       - name: POST /api/cron/tick
+        # --max-time 310 matches the Vercel Pro 300s function ceiling
+        # plus a small connection-overhead buffer. The previous 70s
+        # value caused curl to abandon the connection while the function
+        # was still doing useful work; the GH Action reported failure
+        # while Vercel quietly finished the tick. Keeping curl alive for
+        # the full duration means the GH dashboard accurately reflects
+        # tick success/failure. On Hobby (60s function ceiling) the
+        # function returns long before the curl timeout, so this value
+        # is only a ceiling — it doesn't slow down fast ticks.
         run: |
           HTTP_STATUS=$(curl -s -o /tmp/tick_body.json -w "%{http_code}" \
             -X POST "${SITE_URL}/api/cron/tick" \
             -H "Authorization: Bearer ${CRON_SECRET}" \
-            --max-time 70)
+            --max-time 310)
           echo "HTTP status: ${HTTP_STATUS}"
           cat /tmp/tick_body.json || true
           if [ "${HTTP_STATUS}" -lt 200 ] || [ "${HTTP_STATUS}" -ge 300 ]; then

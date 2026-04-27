@@ -99,6 +99,14 @@ function isJsonContractFailure(err: unknown): boolean {
 interface CollectorDeps {
   /** Artificial per-call pacing in milliseconds (respects rate limits). */
   pacingMs?: number;
+  /**
+   * Wall-clock deadline (Date.now() ms) at which the collector must stop
+   * processing further prompts in this sample, so the tick can yield to
+   * another model. Already-collected prompts are persisted and the next
+   * tick resumes from where this one left off (resume-fast path in the
+   * loop). When omitted, the collector runs the full sample.
+   */
+  deadlineMs?: number;
 }
 
 export interface CollectSampleResult {
@@ -108,6 +116,12 @@ export interface CollectSampleResult {
   succeeded: number;
   failed: number;
   durationMs: number;
+  /**
+   * True if the collector exited before completing all prompts because
+   * it hit the deadline. The caller (tick) uses this to decide whether
+   * to keep looping or move on to rating.
+   */
+  partial: boolean;
 }
 
 /**
@@ -116,20 +130,58 @@ export interface CollectSampleResult {
  *
  * "Needs collecting" = any response row for that (run, sampleIndex)
  * where raw_json is null.
+ *
+ * Ordering: the run with the FEWEST already-filled responses goes first,
+ * tiebroken by oldest run_id. This is round-robin fairness — a slow
+ * model that takes multiple ticks to drain (e.g. GLM at 49s/call * 21
+ * prompts) cannot monopolize consecutive ticks and starve other models.
+ * Each tick that touches a slow run advances its filled count; the next
+ * tick then picks whichever other run is now least-progressed. The end
+ * result is breadth-first progress across the whole panel rather than
+ * depth-first completion of one model at a time.
  */
 export async function findNextPendingSample(): Promise<
   { runId: number; sampleIndex: number } | null
 > {
   const database = db();
-  // Take the earliest (runId, sampleIndex) with at least one unfilled response.
+
+  // Step 1: pick the runId with the fewest filled responses, restricted
+  // to runs that still have at least one unfilled placeholder. Postgres
+  // FILTER clause is the cleanest way to count matching rows per group.
+  const candidate = await database
+    .select({
+      runId: schema.responses.runId,
+    })
+    .from(schema.responses)
+    .groupBy(schema.responses.runId)
+    .having(
+      sql`COUNT(*) FILTER (WHERE ${schema.responses.rawJson} IS NULL) > 0`,
+    )
+    .orderBy(
+      sql`COUNT(*) FILTER (WHERE ${schema.responses.rawJson} IS NOT NULL) ASC`,
+      asc(schema.responses.runId),
+    )
+    .limit(1);
+
+  if (candidate.length === 0) return null;
+  const chosenRunId = candidate[0].runId;
+
+  // Step 2: within that run, pick the lowest sampleIndex with a pending
+  // response. With SAMPLES_PER_MODEL=1 this is always 0, but the lookup
+  // is cheap and forward-compatible with N>1.
   const rows = await database
     .select({
       runId: schema.responses.runId,
       sampleIndex: schema.responses.sampleIndex,
     })
     .from(schema.responses)
-    .where(isNull(schema.responses.rawJson))
-    .orderBy(asc(schema.responses.runId), asc(schema.responses.sampleIndex))
+    .where(
+      and(
+        eq(schema.responses.runId, chosenRunId),
+        isNull(schema.responses.rawJson),
+      ),
+    )
+    .orderBy(asc(schema.responses.sampleIndex))
     .limit(1);
 
   return rows[0] ?? null;
@@ -248,8 +300,18 @@ export async function collectSample(
   let attempted = 0;
   let succeeded = 0;
   let failed = 0;
+  let partial = false;
 
   for (const prompt of prompts) {
+    // Yield to other runs if we're past the deadline. We check before
+    // starting each prompt because each prompt's API call can take up to
+    // its provider timeoutMs (55s default, 90s for GLM). Already-filled
+    // rows are persisted as we go, so the next tick resumes via the
+    // alreadyDone map without re-asking.
+    if (deps.deadlineMs !== undefined && Date.now() > deps.deadlineMs) {
+      partial = true;
+      break;
+    }
     // Resolve per-prompt v2 metadata (mode + forced-choice range).
     // DB-level `mode` is authoritative; fall back to the in-memory
     // anchor-v2 file when the DB column is absent (older seeds).
@@ -590,6 +652,7 @@ export async function collectSample(
     succeeded,
     failed,
     durationMs: Date.now() - started,
+    partial,
   };
 }
 

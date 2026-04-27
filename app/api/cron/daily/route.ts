@@ -38,6 +38,14 @@ export const maxDuration = 300;
 // Leave headroom for the final response and any in-flight DB writes.
 const COLLECT_BUDGET_MS = 270_000;
 
+// Reserve at least this much for the rate phase so a daily run that
+// just filled rows produces inter-rater data immediately.
+const RATE_PHASE_RESERVE_MS = 40_000;
+
+// Per-sample wall-clock cap. Sized so the round-robin loop touches every
+// pending run inside one daily call before re-visiting the slow ones.
+const PER_SAMPLE_BUDGET_MS = 90_000;
+
 export async function POST(req: NextRequest) {
   let authed = false;
   try {
@@ -69,33 +77,58 @@ export async function POST(req: NextRequest) {
   }
 
   // Phase 2: collect as many pending samples as fit in the time budget.
-  const collectReport: Array<{ runId: number; sampleIndex: number; succeeded: number; failed: number }> = [];
+  // Same round-robin + per-sample deadline pattern as /api/cron/tick:
+  //   - findNextPendingSample picks the least-progressed run (fairness).
+  //   - Each sample bails at its per-sample deadline; the next iteration
+  //     picks a different run because the touched run now has more
+  //     filled responses than its peers.
+  //   - No pacingMs override; the collector applies the provider-specific
+  //     floor (SambaNova 3.5s, Google 7s, etc.) which the previous
+  //     hardcoded 500ms used to trample.
+  const collectReport: Array<{
+    runId: number;
+    sampleIndex: number;
+    succeeded: number;
+    failed: number;
+    partial: boolean;
+  }> = [];
   let ratedResponses = 0;
   let rateFailures = 0;
 
-  while (Date.now() - started < COLLECT_BUDGET_MS) {
+  const collectPhaseDeadline = started + (COLLECT_BUDGET_MS - RATE_PHASE_RESERVE_MS);
+  while (Date.now() < collectPhaseDeadline) {
     const nextSample = await findNextPendingSample().catch(() => null);
     if (!nextSample) break;
 
-    // Each sample can take 20–50s. Stop before we blow the budget.
-    if (Date.now() - started > COLLECT_BUDGET_MS - 55_000) break;
+    const remaining = collectPhaseDeadline - Date.now();
+    const sampleDeadlineMs = Date.now() + Math.min(PER_SAMPLE_BUDGET_MS, remaining);
 
     try {
-      const r = await collectSample(nextSample.runId, nextSample.sampleIndex, { pacingMs: 500 });
-      collectReport.push({ runId: r.runId, sampleIndex: r.sampleIndex, succeeded: r.succeeded, failed: r.failed });
+      const r = await collectSample(nextSample.runId, nextSample.sampleIndex, {
+        deadlineMs: sampleDeadlineMs,
+      });
+      collectReport.push({
+        runId: r.runId,
+        sampleIndex: r.sampleIndex,
+        succeeded: r.succeeded,
+        failed: r.failed,
+        partial: r.partial,
+      });
+      if (r.attempted === 0) break;
     } catch {
-      break; // provider error — leave remaining samples for the tick
+      // Per-sample hard error — leave the rest of the queue for /tick
+      // and proceed to rating instead of aborting the whole bootstrap.
+      break;
     }
   }
 
   // Phase 3: rate collected responses within remaining budget.
-  while (Date.now() - started < COLLECT_BUDGET_MS) {
+  while (Date.now() - started < COLLECT_BUDGET_MS - 3_000) {
     const nextRespId = await findNextUnratedResponse().catch(() => null);
     if (nextRespId === null) break;
     const r = await rateOne(nextRespId);
     if (r.ok) ratedResponses++;
     else rateFailures++;
-    if (Date.now() - started > COLLECT_BUDGET_MS - 3_000) break;
   }
 
   return NextResponse.json({
