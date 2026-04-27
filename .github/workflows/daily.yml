@@ -22,19 +22,51 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: POST /api/cron/daily
+        # Why these curl flags:
+        #   --max-time 310 must exceed Vercel's maxDuration=300 so curl
+        #     doesn't abandon the connection while the function is still
+        #     doing useful work (the previous --max-time 60 caused every
+        #     daily-bootstrap workflow run to red-flag in GH Actions
+        #     while the bootstrap actually succeeded server-side).
+        #   No -f flag — we want to print the response body even on HTTP
+        #     errors so the failure cause is visible in the Actions log
+        #     instead of curl exiting 22 with no diagnostic.
+        #   -sS keeps the run quiet on success but surfaces curl's own
+        #     errors (DNS, TLS, connection-refused).
+        #   Manual exit-on-status check below replaces the -f behaviour
+        #     while still printing the body.
         run: |
-          curl -fsSL -X POST "${SITE_URL}/api/cron/daily" \
+          HTTP_STATUS=$(curl -sS -o /tmp/daily_body.json -w "%{http_code}" \
+            -X POST "${SITE_URL}/api/cron/daily" \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             -H "Content-Type: application/json" \
-            --max-time 60
+            --max-time 310)
+          echo "HTTP status: ${HTTP_STATUS}"
+          cat /tmp/daily_body.json || true
+          echo
+          if [ "${HTTP_STATUS}" -lt 200 ] || [ "${HTTP_STATUS}" -ge 300 ]; then
+            echo "::error::Daily bootstrap returned HTTP ${HTTP_STATUS}"
+            exit 1
+          fi
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           SITE_URL: ${{ secrets.SITE_URL }}
       - name: Kick off first tick
+        # if: always() — even if the bootstrap step times out at curl
+        # level, the Vercel function may have completed bootstrap and
+        # we still want to drain the queue immediately. The tick is
+        # idempotent (no work → no-op).
+        if: always()
         run: |
-          curl -fsSL -X POST "${SITE_URL}/api/cron/tick" \
+          HTTP_STATUS=$(curl -sS -o /tmp/tick_body.json -w "%{http_code}" \
+            -X POST "${SITE_URL}/api/cron/tick" \
             -H "Authorization: Bearer ${CRON_SECRET}" \
-            --max-time 65 || true
+            --max-time 310)
+          echo "HTTP status: ${HTTP_STATUS}"
+          cat /tmp/tick_body.json || true
+          echo
+          # Don't fail the job if the tick step alone fails — the
+          # supplementary every-10-min tick workflow will pick up.
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           SITE_URL: ${{ secrets.SITE_URL }}

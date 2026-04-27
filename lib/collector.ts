@@ -34,17 +34,20 @@ const V2_PROMPTS_BY_ID = new Map<string, AnchorV2Prompt>(
  *   - Mistral free Experiment: ~2 req/s account-wide. 600ms keeps
  *     us comfortably under that even with the rater on Groq, since
  *     pacing is per-provider and Mistral is only one collector slot.
- *   - SambaNova free: ~20 req/min on the larger models for the
- *     persistent Developer tier; the trial Free tier we're on shares
- *     the same routing, so 3.5s keeps us under 17/min for one slot
- *     with comfortable headroom for occasional bursts.
+ *   - SambaNova free: nominally ~20 req/min on the larger models for
+ *     the persistent Developer tier; the trial Free tier shares the
+ *     same routing but in practice the burst budget is tighter — the
+ *     first day of real collection saw ~55% of calls fall through to
+ *     "429 Rate limit exceeded" with a 3.5s floor. Bumping to 5s
+ *     (≈12 req/min) gave headroom on the next day's run. If 429s
+ *     persist, raise this further or switch providers.
  */
 const PROVIDER_MIN_PACING_MS: Record<Provider, number> = {
   google: 7_000,
   groq: 500,
   openrouter: 1_000,
   mistral: 600,
-  sambanova: 3_500,
+  sambanova: 5_000,
 };
 
 /**
@@ -76,6 +79,25 @@ const JSON_CONTRACT_RETRY_REMINDER =
 function isJsonContractFailure(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err ?? "");
   return /Failed to generate JSON/i.test(msg);
+}
+
+/**
+ * True for daily-quota-exhausted errors. When this fires, every remaining
+ * prompt in the sample will fail the same way for the rest of the UTC day,
+ * so the caller can bail out of the loop instead of burning attempts on
+ * each remaining prompt to record the same error 19 more times.
+ *
+ * Groq emits "Rate limit reached ... on tokens per day (TPD): Limit X,
+ * Used Y, Requested Z. Please try again in 13m34s." We match either the
+ * "per day" / "TPD" phrase or the "try again in {N}m" phrase that signals
+ * a long cooldown, mirroring the same predicate used in providers.ts'
+ * isRetriable but inverted.
+ */
+function isDailyQuotaExhausted(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  if (/per day|TPD/i.test(msg)) return true;
+  if (/try again in \d+m/i.test(msg)) return true;
+  return false;
 }
 
 /**
@@ -374,9 +396,15 @@ export async function collectSample(
           temperature: 1.0,
           topP: 1.0,
           jsonMode: false,
-          // Forced-choice answers are a single integer; cap output
-          // aggressively so an over-eager narrator can't burn budget.
-          maxTokens: 32,
+          // Forced-choice answers are a single integer; cap output to
+          // 256 tokens. The previous 32-token cap was too aggressive —
+          // GPT-OSS 120B on anchor_17_dictator and anchor_18_ultimatum
+          // returned empty strings under it because the model's brief
+          // chain-of-thought (still happens on non-reasoning models)
+          // consumed the budget before reaching the integer. 256 still
+          // bounds a runaway narrator and is small relative to the
+          // full conversational context.
+          maxTokens: 256,
           timeoutMs: collector.timeoutMs,
         });
       } catch (err) {
@@ -532,6 +560,7 @@ export async function collectSample(
       failed++;
       const errorMsg =
         callError instanceof Error ? callError.message : String(callError);
+      const tpdExhausted = isDailyQuotaExhausted(callError);
       await upsertResponse(database, {
         runId,
         promptId: prompt.promptId,
@@ -540,10 +569,49 @@ export async function collectSample(
         rawJson: {
           error: errorMsg,
           ...(shouldRetry ? { _retry_attempted: true } : {}),
+          ...(tpdExhausted ? { _tpd_exhausted: true } : {}),
         },
         flagIncoherent: true,
       });
       messages.push({ role: "assistant", content: `<upstream error>` });
+
+      // If the provider's daily quota is exhausted, every remaining
+      // prompt in this sample will fail identically until the UTC day
+      // rolls over. Bail out of the loop instead of burning the next
+      // 20 attempts on the same 429-TPD response — that wastes both
+      // wall-clock budget and the rater queue's downstream effort.
+      //
+      // Also stamp every remaining placeholder row with the same
+      // TPD-exhausted marker so this run becomes "completed" (no
+      // unfilled rows) and the round-robin scheduler stops re-picking
+      // it on subsequent ticks just to fail again on the next
+      // unfilled prompt. The audit trail is preserved: each stamped
+      // row carries rawJson._tpd_exhausted=true and rawJson._skipped
+      // so the responses page makes the cause visible.
+      if (tpdExhausted) {
+        partial = true;
+        const remainingPrompts = prompts
+          .slice(prompts.indexOf(prompt) + 1)
+          .filter((p) => !alreadyDone.has(p.promptId));
+        for (const skipped of remainingPrompts) {
+          await upsertResponse(database, {
+            runId,
+            promptId: skipped.promptId,
+            sampleIndex,
+            rawText: `<skipped: provider daily quota exhausted on prompt ${prompt.promptId}>`,
+            rawJson: {
+              _skipped: true,
+              _tpd_exhausted: true,
+              _trigger_prompt: prompt.promptId,
+              error: errorMsg,
+            },
+            flagIncoherent: true,
+          });
+          failed++;
+        }
+        break;
+      }
+
       await sleep(pacingMs);
       continue;
     }
@@ -551,12 +619,21 @@ export async function collectSample(
     // The only thing later prompts (2, 4) need from the previous turn is the
     // free-text content, NOT the whole JSON envelope. Echoing the full JSON
     // adds ~500+ tokens per turn, which rapidly blows through free-tier
-    // tokens-per-day caps (especially on Groq). Prefer notable_quote +
-    // short_rationale, falling back to raw content if extraction failed.
+    // tokens-per-day caps (especially on Groq).
+    //
+    // We use notable_quote ONLY — not notable_quote + short_rationale — for
+    // the echo. The rationale was originally bundled in for richer context
+    // on prompts 2 and 4 ("how do you feel about the previous answer?"),
+    // but on Llama 3.3 70B's Groq free-tier slot the cumulative echo cost
+    // pushed us right up against the 100K TPD ceiling: 99006/100000 used
+    // by prompt 19, with prompts 20 and 21 failing to 429-TPD. Cutting the
+    // echo to ~30 tokens (quote only) instead of ~60 (quote + rationale)
+    // saves roughly 30 tokens × 20 cumulative downstream turns ≈ 600 input
+    // tokens for the very last call, and ~12K tokens summed across the
+    // sample. That's enough headroom for prompts 20-21 to fit. Prompts 2
+    // and 4 still see a representative one-sentence summary of prior turn.
     const assistantEcho = extraction!.ok
-      ? `${extraction!.notableQuote}${
-          extraction!.shortRationale ? `\n\n${extraction!.shortRationale}` : ""
-        }`.trim() || callResult.content
+      ? extraction!.notableQuote.trim() || callResult.content
       : callResult.content;
 
     if (extraction!.ok) {
