@@ -12,6 +12,28 @@ import {
   Legend,
 } from "recharts";
 import ConstructGlossary from "./construct-glossary";
+import { ANCHOR_V2_PROMPTS } from "@/lib/prompts/anchor-v2";
+
+/**
+ * Per-prompt y-axis domain for the forced-choice score. The five Path B
+ * prompts have different units and ranges (0-100 for dictator/ultimatum/
+ * trust, 0-120 for the lottery certainty equivalent, 100-500 for the
+ * delay-discounting required premium). A single 0-500 axis was technically
+ * correct but visually misleading — the dictator chart had ~80% of its
+ * y-space empty because the data only ever lives in 0-100. Driving the
+ * domain off each prompt's canonical forcedChoiceRange (defined in
+ * lib/prompts/anchor-v2.ts) keeps the chart in lock-step with the prompt
+ * definitions: change the range there and this map updates automatically.
+ */
+const FORCED_CHOICE_DOMAIN_BY_PROMPT: Record<string, [number, number]> =
+  Object.fromEntries(
+    ANCHOR_V2_PROMPTS
+      .filter((p) => p.mode === "forced_choice" && p.forcedChoiceRange)
+      .map((p) => [
+        p.promptId,
+        [p.forcedChoiceRange!.min, p.forcedChoiceRange!.max] as [number, number],
+      ]),
+  );
 
 export type PromptPoint = {
   day: string;
@@ -184,7 +206,16 @@ export default function PromptChart({ points }: { points: PromptPoint[] }) {
   };
 
   const { chartData, models, scoreMeta } = useMemo(() => {
-    const meta = SCORE_OPTIONS.find((o) => o.key === scoreKey)!;
+    const baseMeta = SCORE_OPTIONS.find((o) => o.key === scoreKey)!;
+    // Override the y-axis domain when charting forced-choice values: the
+    // global SCORE_OPTIONS entry uses the widest of the five Path B ranges
+    // (0-500 for delay discounting), but each individual prompt has a
+    // narrower true range. Using the prompt-specific range keeps the data
+    // visually centred on the y-axis instead of crammed near zero.
+    const meta =
+      scoreKey === "forcedChoiceValue" && FORCED_CHOICE_DOMAIN_BY_PROMPT[promptId]
+        ? { ...baseMeta, domain: FORCED_CHOICE_DOMAIN_BY_PROMPT[promptId] }
+        : baseMeta;
     const filtered = points.filter((p) => p.promptId === promptId);
     const modelSet = new Map<string, string>();
     const byDay = new Map<string, Record<string, number | string>>();
