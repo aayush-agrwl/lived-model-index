@@ -47,7 +47,40 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           SITE_URL: ${{ secrets.SITE_URL }}
 
+      - name: POST /api/cron/rate
+        # Drain the unrated-responses queue FIRST and as an independent
+        # step. /api/cron/rate only calls the rater model (Llama 3.1 8B
+        # Instant on Groq, ~1-2s per call) and does no collection — so
+        # it cannot be tripped by a slow collector provider, and a 504
+        # in the subsequent /tick step still leaves us with a fully
+        # rated dataset on whatever was already collected. Without this
+        # safety net we've seen days where 131/147 rows were collected
+        # but 0/131 were rated because every /tick 504'd before its
+        # rate phase ran.
+        # --max-time 110 matches the rate endpoint's maxDuration=100s
+        # plus a connection-overhead buffer.
+        run: |
+          HTTP_STATUS=$(curl -s -o /tmp/rate_body.json -w "%{http_code}" \
+            -X POST "${SITE_URL}/api/cron/rate" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            --max-time 110)
+          echo "HTTP status: ${HTTP_STATUS}"
+          cat /tmp/rate_body.json || true
+          echo
+          if [ "${HTTP_STATUS}" -lt 200 ] || [ "${HTTP_STATUS}" -ge 300 ]; then
+            # Don't fail the whole job on a rate-step error — the tick
+            # step below also rates internally (rate-first phase).
+            echo "::warning::Rate endpoint returned HTTP ${HTTP_STATUS}"
+          fi
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+
       - name: POST /api/cron/tick
+        # if: always() — even if the rate step fails, run the tick. The
+        # tick endpoint also rate-firsts internally, so ratings still
+        # have two chances per workflow run.
+        if: always()
         # --max-time 310 matches the Vercel Pro 300s function ceiling
         # plus a small connection-overhead buffer. The previous 70s
         # value caused curl to abandon the connection while the function
@@ -64,6 +97,7 @@ jobs:
             --max-time 310)
           echo "HTTP status: ${HTTP_STATUS}"
           cat /tmp/tick_body.json || true
+          echo
           if [ "${HTTP_STATUS}" -lt 200 ] || [ "${HTTP_STATUS}" -ge 300 ]; then
             echo "::error::Tick endpoint returned HTTP ${HTTP_STATUS}"
             exit 1

@@ -324,13 +324,52 @@ export async function collectSample(
   let failed = 0;
   let partial = false;
 
+  /**
+   * Compute a deadline-aware per-call timeout. The collector's contract
+   * with the tick is: "I'll bail by deadlineMs." But the per-call timeout
+   * baked into ModelEntry.timeoutMs (55s default, 90s for GLM) can exceed
+   * the time we have left in the sample budget. If we start a 90s call
+   * with 30s of budget remaining, the call burns 90s, returns at +60s
+   * past deadline, and the tick has no time left for Phase 2 (rating)
+   * — or worse, blows past Vercel's 300s function ceiling and the whole
+   * function is killed with HTTP 504, losing the ratings the tick was
+   * supposed to do for already-collected rows.
+   *
+   * Take the SMALLER of the model's configured timeout and the remaining
+   * sample budget minus a small safety margin for the DB write afterward.
+   * If even the smaller is below MIN_USABLE_CALL_MS, the call won't
+   * succeed in time — return null so the loop bails instead of starting
+   * a doomed call.
+   */
+  const MIN_USABLE_CALL_MS = 5_000;
+  const SAFETY_MARGIN_MS = 3_000;
+  // Capture the collector locally so TypeScript narrows it correctly
+  // inside the closure (the outer `collector` is typed as possibly
+  // undefined; we already threw above if it was).
+  const collectorEntry = collector;
+  function effectiveCallTimeout(): number | null {
+    const configured = collectorEntry.timeoutMs ?? 55_000;
+    if (deps.deadlineMs === undefined) return configured;
+    const remaining = deps.deadlineMs - Date.now() - SAFETY_MARGIN_MS;
+    if (remaining < MIN_USABLE_CALL_MS) return null;
+    return Math.min(configured, remaining);
+  }
+
   for (const prompt of prompts) {
-    // Yield to other runs if we're past the deadline. We check before
-    // starting each prompt because each prompt's API call can take up to
-    // its provider timeoutMs (55s default, 90s for GLM). Already-filled
-    // rows are persisted as we go, so the next tick resumes via the
-    // alreadyDone map without re-asking.
+    // Yield to other runs if we're past the deadline OR if we don't have
+    // enough remaining budget to start another call. The remaining-budget
+    // check is critical: without it, the loop's "is past deadline?" check
+    // alone can let a single 90s GLM call start at deadline-30s, run for
+    // its full provider timeout, and push the function past the 300s
+    // Vercel ceiling. Vercel kills the function with 504, the tick's
+    // rating phase never runs, and an entire day's collected rows go
+    // unrated.
     if (deps.deadlineMs !== undefined && Date.now() > deps.deadlineMs) {
+      partial = true;
+      break;
+    }
+    const initialCallTimeout = effectiveCallTimeout();
+    if (initialCallTimeout === null) {
       partial = true;
       break;
     }
@@ -405,7 +444,9 @@ export async function collectSample(
           // bounds a runaway narrator and is small relative to the
           // full conversational context.
           maxTokens: 256,
-          timeoutMs: collector.timeoutMs,
+          // Deadline-aware: never let a single call exceed the time
+          // remaining in this sample's budget. See effectiveCallTimeout.
+          timeoutMs: initialCallTimeout,
         });
       } catch (err) {
         fcError = err;
@@ -501,7 +542,10 @@ export async function collectSample(
         temperature: 1.0,
         topP: 1.0,
         jsonMode: true,
-        timeoutMs: collector.timeoutMs,
+        // Deadline-aware: never overrun the sample budget. See
+        // effectiveCallTimeout — checked at loop top so we know it's
+        // already non-null here.
+        timeoutMs: initialCallTimeout,
       });
     } catch (err) {
       callError = err;
@@ -519,7 +563,11 @@ export async function collectSample(
           extraction.reason === "schema_violation"));
 
     let retryRescued = false;
-    if (shouldRetry) {
+    // Re-check the budget before the retry — pacing may have eaten
+    // enough time that we'd overshoot. If so, skip the retry and let
+    // the original failure record stand.
+    const retryCallTimeout = shouldRetry ? effectiveCallTimeout() : null;
+    if (shouldRetry && retryCallTimeout !== null) {
       // Replace the user turn in the conversation with a reminder-appended
       // version. The canonical first-try prompt is preserved longitudinally
       // (the retry only fires on a failure path), but within this sample the
@@ -539,7 +587,7 @@ export async function collectSample(
           temperature: 1.0,
           topP: 1.0,
           jsonMode: true,
-          timeoutMs: collector.timeoutMs,
+          timeoutMs: retryCallTimeout,
         });
         extraction = extractLmiResponse(callResult.content);
         callError = null;
