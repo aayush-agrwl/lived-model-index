@@ -364,12 +364,18 @@ function Heatmap({
   pairwise: Record<string, Record<string, PairResult | null>>;
   range: number;
 }) {
-  // Square cells, sized to keep readable at 7 columns on desktop. The
-  // legend on the right gets its own narrow column so the grid stays
-  // tight even with long model names.
+  // Cell width was 88px when column headers were rotated to fit on a
+  // single angled line. Now that headers stack vertically (model name
+  // on top, provider parenthetical below) we need enough width for the
+  // longest one-line names — "Mistral Small Latest" is the binding
+  // constraint at ~110px in our 11px font.
   const labelColW = 180;
-  const cellW = 88;
+  const cellW = 116;
   const cellH = 56;
+  // Header height fits two short lines comfortably. align-bottom lets
+  // shorter names sit at the baseline so the row of value cells lines
+  // up cleanly underneath whichever label happens to be tallest.
+  const headerH = 48;
 
   return (
     <table className="border-collapse" style={{ fontSize: 12 }}>
@@ -378,23 +384,35 @@ function Heatmap({
           <th
             scope="col"
             style={{ width: labelColW }}
-            className="text-left text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] pb-2"
+            className="text-left text-[11px] uppercase tracking-[0.12em] text-[var(--muted)] pb-2 align-bottom"
           >
             row − column
           </th>
-          {models.map((m) => (
-            <th
-              key={m.modelSlug}
-              scope="col"
-              style={{ width: cellW }}
-              className="px-1 pb-2 align-bottom text-[10.5px] leading-tight text-[var(--muted)]"
-              title={m.modelDisplayName}
-            >
-              <div className="-rotate-12 origin-bottom-left whitespace-nowrap">
-                {m.modelDisplayName.replace(/\(.*\)/, "").trim()}
-              </div>
-            </th>
-          ))}
+          {models.map((m) => {
+            // Split "Foo Bar (Provider)" into [name, provider]. The model
+            // name carries the panel-relevant identity (lineage, size);
+            // the provider parenthetical is secondary context that goes
+            // on the second line in a slightly muted style. If a name
+            // arrives without parens (defensive), the second line is
+            // empty and the cell still renders.
+            const match = m.modelDisplayName.match(/^(.+?)\s*(\(.+\))?\s*$/);
+            const name = (match?.[1] ?? m.modelDisplayName).trim();
+            const provider = (match?.[2] ?? "").trim();
+            return (
+              <th
+                key={m.modelSlug}
+                scope="col"
+                style={{ width: cellW, height: headerH }}
+                className="px-1 pb-2 align-bottom text-center text-[11px] leading-tight text-[var(--muted)]"
+                title={m.modelDisplayName}
+              >
+                <div className="font-medium text-[var(--ink-2)]">{name}</div>
+                {provider ? (
+                  <div className="text-[10px] text-[var(--muted)]">{provider}</div>
+                ) : null}
+              </th>
+            );
+          })}
         </tr>
       </thead>
       <tbody>
