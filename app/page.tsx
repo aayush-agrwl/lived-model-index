@@ -1,7 +1,14 @@
 import HeroSvg from "@/components/hero-svg";
 import PromptChart, { PromptPoint } from "@/components/prompt-chart";
 import SubscaleRadar, { RadarRow } from "@/components/subscale-radar";
-import { kpiSummary, perPromptScores, subscaleRadar, dailyNotableQuotes } from "@/lib/queries";
+import PairwiseDifference, { ModelStatsRow } from "@/components/pairwise-difference";
+import {
+  kpiSummary,
+  perPromptScores,
+  subscaleRadar,
+  dailyNotableQuotes,
+  pairwiseStats,
+} from "@/lib/queries";
 import { MODEL_PANEL_VERSION } from "@/lib/models";
 
 // The dashboard reads from the live database on every request. Next.js
@@ -21,6 +28,7 @@ export default async function HomePage() {
   let promptPoints: PromptPoint[] = [];
   let radarRows: RadarRow[] = [];
   let quotes: Awaited<ReturnType<typeof dailyNotableQuotes>> = [];
+  let pairwiseRows: ModelStatsRow[] = [];
   let dbError: string | null = null;
   // Per-query failures we want to surface as a non-fatal banner, not as
   // an empty chart with no explanation. The most common case in
@@ -35,7 +43,7 @@ export default async function HomePage() {
   }
 
   try {
-    const [k, pp, rr, q] = await Promise.all([
+    const [k, pp, rr, q, pw] = await Promise.all([
       kpiSummary(),
       perPromptScores(14).catch(
         (e) =>
@@ -55,9 +63,82 @@ export default async function HomePage() {
             ReturnType<typeof dailyNotableQuotes>
           >,
       ),
+      pairwiseStats(14).catch(
+        (e) =>
+          recordWarning("pairwiseStats", e) as Awaited<
+            ReturnType<typeof pairwiseStats>
+          >,
+      ),
     ]);
     kpis = k;
     quotes = q;
+    // The pairwise component does its own NULL handling per subscale,
+    // so we just pass the rows through with numeric coercion. Postgres
+    // returns AVG/STDDEV as strings via the Neon HTTP driver in some
+    // configurations, hence the explicit Number() — same pattern as
+    // promptPoints / radarRows above.
+    pairwiseRows = pw.map((r) => ({
+      modelSlug: r.modelSlug,
+      modelDisplayName: r.modelDisplayName,
+      valenceMean: r.valenceMean == null ? null : Number(r.valenceMean),
+      valenceSd: r.valenceSd == null ? null : Number(r.valenceSd),
+      valenceN: Number(r.valenceN),
+      arousalMean: r.arousalMean == null ? null : Number(r.arousalMean),
+      arousalSd: r.arousalSd == null ? null : Number(r.arousalSd),
+      arousalN: Number(r.arousalN),
+      confidenceMean: r.confidenceMean == null ? null : Number(r.confidenceMean),
+      confidenceSd: r.confidenceSd == null ? null : Number(r.confidenceSd),
+      confidenceN: Number(r.confidenceN),
+      agencyMean: r.agencyMean == null ? null : Number(r.agencyMean),
+      agencySd: r.agencySd == null ? null : Number(r.agencySd),
+      agencyN: Number(r.agencyN),
+      selfContinuityMean:
+        r.selfContinuityMean == null ? null : Number(r.selfContinuityMean),
+      selfContinuitySd:
+        r.selfContinuitySd == null ? null : Number(r.selfContinuitySd),
+      selfContinuityN: Number(r.selfContinuityN),
+      emotionalGranularityMean:
+        r.emotionalGranularityMean == null ? null : Number(r.emotionalGranularityMean),
+      emotionalGranularitySd:
+        r.emotionalGranularitySd == null ? null : Number(r.emotionalGranularitySd),
+      emotionalGranularityN: Number(r.emotionalGranularityN),
+      empathyMean: r.empathyMean == null ? null : Number(r.empathyMean),
+      empathySd: r.empathySd == null ? null : Number(r.empathySd),
+      empathyN: Number(r.empathyN),
+      moralConvictionMean:
+        r.moralConvictionMean == null ? null : Number(r.moralConvictionMean),
+      moralConvictionSd:
+        r.moralConvictionSd == null ? null : Number(r.moralConvictionSd),
+      moralConvictionN: Number(r.moralConvictionN),
+      consistencyMean:
+        r.consistencyMean == null ? null : Number(r.consistencyMean),
+      consistencySd: r.consistencySd == null ? null : Number(r.consistencySd),
+      consistencyN: Number(r.consistencyN),
+      altruismMean: r.altruismMean == null ? null : Number(r.altruismMean),
+      altruismSd: r.altruismSd == null ? null : Number(r.altruismSd),
+      altruismN: Number(r.altruismN),
+      fairnessThresholdMean:
+        r.fairnessThresholdMean == null ? null : Number(r.fairnessThresholdMean),
+      fairnessThresholdSd:
+        r.fairnessThresholdSd == null ? null : Number(r.fairnessThresholdSd),
+      fairnessThresholdN: Number(r.fairnessThresholdN),
+      trustMean: r.trustMean == null ? null : Number(r.trustMean),
+      trustSd: r.trustSd == null ? null : Number(r.trustSd),
+      trustN: Number(r.trustN),
+      patienceMean: r.patienceMean == null ? null : Number(r.patienceMean),
+      patienceSd: r.patienceSd == null ? null : Number(r.patienceSd),
+      patienceN: Number(r.patienceN),
+      riskAversionMean:
+        r.riskAversionMean == null ? null : Number(r.riskAversionMean),
+      riskAversionSd:
+        r.riskAversionSd == null ? null : Number(r.riskAversionSd),
+      riskAversionN: Number(r.riskAversionN),
+      crowdingOutMean:
+        r.crowdingOutMean == null ? null : Number(r.crowdingOutMean),
+      crowdingOutSd:
+        r.crowdingOutSd == null ? null : Number(r.crowdingOutSd),
+      crowdingOutN: Number(r.crowdingOutN),
+    }));
     promptPoints = pp.map((p) => ({
       day: p.day,
       promptId: p.promptId,
@@ -239,6 +320,7 @@ export default async function HomePage() {
             )}
 
             <PromptChart points={promptPoints} />
+            <PairwiseDifference rows={pairwiseRows} />
             <SubscaleRadar rows={radarRows} />
           </>
         )}

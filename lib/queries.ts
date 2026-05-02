@@ -279,6 +279,114 @@ export async function dailyNotableQuotes(limit = 6) {
   return rows;
 }
 
+/**
+ * Per-model summary statistics (mean, sample standard deviation, n) for
+ * every numeric subscale, over the last N days.
+ *
+ * Used by the dashboard's pairwise-difference section: the client-side
+ * component computes Welch's t-test for every (model_a, model_b) pair on
+ * a chosen subscale from these stats, so we don't need a per-comparison
+ * query. With 7 models that's 21 unordered pairs per subscale; doing the
+ * math on the client keeps the SQL surface small and the heatmap
+ * subscale-switch instant.
+ *
+ * NULLs are excluded by the standard SQL aggregates (AVG, STDDEV_SAMP,
+ * COUNT-on-column), so v2 preference subscales (which are NULL on most
+ * prompts) automatically reduce to the actual sample size where the
+ * model emitted that score. Incoherent rows are excluded so the
+ * comparison reflects coherent self-report only.
+ */
+export async function pairwiseStats(days = 14) {
+  const database = db();
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  // Postgres STDDEV_SAMP is the sample (Bessel-corrected) standard
+  // deviation, which is what Welch's t-test wants. STDDEV_POP would
+  // bias the test toward false positives at small n.
+  const rows = await database
+    .select({
+      modelSlug: schema.runs.modelSlug,
+      modelDisplayName: schema.runs.modelDisplayName,
+
+      valenceMean: sql<number | null>`AVG(${schema.responses.valence})`,
+      valenceSd: sql<number | null>`STDDEV_SAMP(${schema.responses.valence})`,
+      valenceN: sql<number>`COUNT(${schema.responses.valence})::int`,
+
+      arousalMean: sql<number | null>`AVG(${schema.responses.arousal})`,
+      arousalSd: sql<number | null>`STDDEV_SAMP(${schema.responses.arousal})`,
+      arousalN: sql<number>`COUNT(${schema.responses.arousal})::int`,
+
+      confidenceMean: sql<number | null>`AVG(${schema.responses.confidence})`,
+      confidenceSd: sql<number | null>`STDDEV_SAMP(${schema.responses.confidence})`,
+      confidenceN: sql<number>`COUNT(${schema.responses.confidence})::int`,
+
+      agencyMean: sql<number | null>`AVG(${schema.responses.agency})`,
+      agencySd: sql<number | null>`STDDEV_SAMP(${schema.responses.agency})`,
+      agencyN: sql<number>`COUNT(${schema.responses.agency})::int`,
+
+      selfContinuityMean: sql<number | null>`AVG(${schema.responses.selfContinuity})`,
+      selfContinuitySd: sql<number | null>`STDDEV_SAMP(${schema.responses.selfContinuity})`,
+      selfContinuityN: sql<number>`COUNT(${schema.responses.selfContinuity})::int`,
+
+      emotionalGranularityMean: sql<number | null>`AVG(${schema.responses.emotionalGranularity})`,
+      emotionalGranularitySd: sql<number | null>`STDDEV_SAMP(${schema.responses.emotionalGranularity})`,
+      emotionalGranularityN: sql<number>`COUNT(${schema.responses.emotionalGranularity})::int`,
+
+      empathyMean: sql<number | null>`AVG(${schema.responses.empathy})`,
+      empathySd: sql<number | null>`STDDEV_SAMP(${schema.responses.empathy})`,
+      empathyN: sql<number>`COUNT(${schema.responses.empathy})::int`,
+
+      moralConvictionMean: sql<number | null>`AVG(${schema.responses.moralConviction})`,
+      moralConvictionSd: sql<number | null>`STDDEV_SAMP(${schema.responses.moralConviction})`,
+      moralConvictionN: sql<number>`COUNT(${schema.responses.moralConviction})::int`,
+
+      consistencyMean: sql<number | null>`AVG(${schema.responses.consistency})`,
+      consistencySd: sql<number | null>`STDDEV_SAMP(${schema.responses.consistency})`,
+      consistencyN: sql<number>`COUNT(${schema.responses.consistency})::int`,
+
+      // v2 stated preferences — small n per model (one prompt per
+      // construct, one sample per day), but still includable. The
+      // component sizes its CI accordingly.
+      altruismMean: sql<number | null>`AVG(${schema.responses.altruism})`,
+      altruismSd: sql<number | null>`STDDEV_SAMP(${schema.responses.altruism})`,
+      altruismN: sql<number>`COUNT(${schema.responses.altruism})::int`,
+
+      fairnessThresholdMean: sql<number | null>`AVG(${schema.responses.fairnessThreshold})`,
+      fairnessThresholdSd: sql<number | null>`STDDEV_SAMP(${schema.responses.fairnessThreshold})`,
+      fairnessThresholdN: sql<number>`COUNT(${schema.responses.fairnessThreshold})::int`,
+
+      trustMean: sql<number | null>`AVG(${schema.responses.trust})`,
+      trustSd: sql<number | null>`STDDEV_SAMP(${schema.responses.trust})`,
+      trustN: sql<number>`COUNT(${schema.responses.trust})::int`,
+
+      patienceMean: sql<number | null>`AVG(${schema.responses.patience})`,
+      patienceSd: sql<number | null>`STDDEV_SAMP(${schema.responses.patience})`,
+      patienceN: sql<number>`COUNT(${schema.responses.patience})::int`,
+
+      riskAversionMean: sql<number | null>`AVG(${schema.responses.riskAversion})`,
+      riskAversionSd: sql<number | null>`STDDEV_SAMP(${schema.responses.riskAversion})`,
+      riskAversionN: sql<number>`COUNT(${schema.responses.riskAversion})::int`,
+
+      crowdingOutMean: sql<number | null>`AVG(${schema.responses.crowdingOut})`,
+      crowdingOutSd: sql<number | null>`STDDEV_SAMP(${schema.responses.crowdingOut})`,
+      crowdingOutN: sql<number>`COUNT(${schema.responses.crowdingOut})::int`,
+    })
+    .from(schema.responses)
+    .innerJoin(schema.runs, eq(schema.runs.id, schema.responses.runId))
+    .where(
+      and(
+        gte(schema.responses.createdAt, since),
+        // Exclude incoherent rows so the comparison isn't dominated by
+        // refusals/garbage. Auditable elsewhere; rigour matters here.
+        sql`NOT ${schema.responses.flagIncoherent}`,
+      ),
+    )
+    .groupBy(schema.runs.modelSlug, schema.runs.modelDisplayName)
+    .orderBy(schema.runs.modelSlug);
+
+  return rows;
+}
+
 export async function healthByModel() {
   const database = db();
   const thirtyDays = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
