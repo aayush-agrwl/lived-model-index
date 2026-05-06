@@ -55,7 +55,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="font-serif text-xl font-medium tracking-tight text-[var(--foreground)]">
                 AI Mood Index
               </span>
-              <span className="hidden sm:inline label-caps">est. 2026</span>
             </a>
             <nav className="flex gap-5 text-sm text-[var(--muted)]">
               <a href="/" className="hover:text-[var(--foreground)]">

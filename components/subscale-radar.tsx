@@ -81,8 +81,15 @@ function normalize(raw: number | null, min: number, max: number) {
 }
 
 export default function SubscaleRadar({ rows }: { rows: RadarRow[] }) {
+  // Default: every model in the panel is selected. Earlier this was
+  // `rows.slice(0, 4)` to keep the radar legible at first glance, but that
+  // hid Llama 4 Scout, Mistral Small Latest, and Qwen 3 32B — readers
+  // landing on the page were missing three of seven panel members and
+  // had to discover the toggles to see them. Showing all seven on by
+  // default and letting visitors deselect what they don't want preserves
+  // the gestalt of the panel without hiding data.
   const [active, setActive] = useState<Set<string>>(
-    () => new Set(rows.slice(0, 4).map((r) => r.modelSlug)),
+    () => new Set(rows.map((r) => r.modelSlug)),
   );
   const isDark = usePrefersDark();
   const MODEL_COLORS = isDark ? DARK_MODEL_COLORS : LIGHT_MODEL_COLORS;
