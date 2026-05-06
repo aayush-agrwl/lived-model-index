@@ -280,29 +280,24 @@ export async function dailyNotableQuotes(limit = 6) {
 }
 
 /**
- * Cumulative count of runs per prompt-set version, all-time.
+ * Number of distinct calendar dates on which the pipeline has produced
+ * any runs at all, across every prompt-set version and panel version.
  *
- * Used by the /health page's Today panel to surface running totals like
- * "Anchor v1: 18, Anchor v2: 11" alongside today's collect/rate
- * progress. The single all-day-runs count was previously stuck at the
- * panel size (one run per model per day) and conveyed no information
- * the panel-config page didn't already expose.
- *
- * Returns an array even when a version has zero runs — callers should
- * default to 0 by version name. Sorted by version ascending so the
- * caller can render in the same order on every render.
+ * This is the natural answer to "how many times has the AI Mood Index
+ * actually run?" — it counts unique days of operation rather than rows,
+ * so a panel of seven models bootstrapping seven runs on a single day
+ * counts as one. Used by the /health page's Today panel; intentionally
+ * collapses across prompt-set versions so the figure stays a single
+ * intuitive number that ticks up by one each successful day.
  */
-export async function cumulativeRunsByVersion() {
+export async function totalRunDays(): Promise<number> {
   const database = db();
   const rows = await database
     .select({
-      promptSetVersion: schema.runs.promptSetVersion,
-      runs: sql<number>`count(*)::int`,
+      days: sql<number>`COUNT(DISTINCT DATE(${schema.runs.startedAt}))::int`,
     })
-    .from(schema.runs)
-    .groupBy(schema.runs.promptSetVersion)
-    .orderBy(schema.runs.promptSetVersion);
-  return rows;
+    .from(schema.runs);
+  return rows[0]?.days ?? 0;
 }
 
 /**

@@ -1,7 +1,7 @@
 import {
   healthByModel,
   latestRunPerModel,
-  cumulativeRunsByVersion,
+  totalRunDays,
 } from "@/lib/queries";
 import { todayStatus } from "@/lib/orchestration";
 
@@ -27,26 +27,19 @@ export default async function HealthPage() {
   let rows: Awaited<ReturnType<typeof healthByModel>> = [];
   let today: Awaited<ReturnType<typeof todayStatus>> | null = null;
   let perModel: Awaited<ReturnType<typeof latestRunPerModel>> = [];
-  let cumulative: Awaited<ReturnType<typeof cumulativeRunsByVersion>> = [];
+  let runDays = 0;
   let dbError: string | null = null;
 
   try {
-    [rows, today, perModel, cumulative] = await Promise.all([
+    [rows, today, perModel, runDays] = await Promise.all([
       healthByModel(),
       todayStatus(),
       latestRunPerModel(),
-      cumulativeRunsByVersion(),
+      totalRunDays(),
     ]);
   } catch (err) {
     dbError = err instanceof Error ? err.message : String(err);
   }
-
-  // Look-ups by prompt-set version. Default to 0 so a version that has
-  // never run yet still renders a stat card rather than disappearing.
-  const v1Runs =
-    cumulative.find((r) => r.promptSetVersion === "anchor_v1")?.runs ?? 0;
-  const v2Runs =
-    cumulative.find((r) => r.promptSetVersion === "anchor_v2")?.runs ?? 0;
 
   return (
     <div className="space-y-10">
@@ -71,10 +64,9 @@ export default async function HealthPage() {
               <h2 className="font-serif text-2xl tracking-tight">Today</h2>
               <span className="label-caps">UTC</span>
             </header>
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Stat label="Date" value={today?.date ?? "—"} />
-              <Stat label="Anchor v1 runs" value={String(v1Runs)} />
-              <Stat label="Anchor v2 runs" value={String(v2Runs)} />
+              <Stat label="Runs" value={String(runDays)} />
               <Stat
                 label="Collect progress"
                 value={`${today?.collectDone ?? 0} / ${today?.collectTotal ?? 0}`}
