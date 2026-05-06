@@ -66,7 +66,7 @@ export default async function HealthPage() {
             </header>
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Stat label="Date" value={today?.date ?? "—"} />
-              <Stat label="Runs" value={String(runDays)} />
+              <Stat label="Days of data collected" value={String(runDays)} />
               <Stat
                 label="Collect progress"
                 value={`${today?.collectDone ?? 0} / ${today?.collectTotal ?? 0}`}
