@@ -280,6 +280,32 @@ export async function dailyNotableQuotes(limit = 6) {
 }
 
 /**
+ * Cumulative count of runs per prompt-set version, all-time.
+ *
+ * Used by the /health page's Today panel to surface running totals like
+ * "Anchor v1: 18, Anchor v2: 11" alongside today's collect/rate
+ * progress. The single all-day-runs count was previously stuck at the
+ * panel size (one run per model per day) and conveyed no information
+ * the panel-config page didn't already expose.
+ *
+ * Returns an array even when a version has zero runs — callers should
+ * default to 0 by version name. Sorted by version ascending so the
+ * caller can render in the same order on every render.
+ */
+export async function cumulativeRunsByVersion() {
+  const database = db();
+  const rows = await database
+    .select({
+      promptSetVersion: schema.runs.promptSetVersion,
+      runs: sql<number>`count(*)::int`,
+    })
+    .from(schema.runs)
+    .groupBy(schema.runs.promptSetVersion)
+    .orderBy(schema.runs.promptSetVersion);
+  return rows;
+}
+
+/**
  * Per-model summary statistics (mean, sample standard deviation, n) for
  * every numeric subscale, over the last N days.
  *

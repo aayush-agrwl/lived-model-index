@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, EB_Garamond } from "next/font/google";
 import "./globals.css";
+import { MODEL_PANEL_VERSION } from "@/lib/models";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -78,7 +79,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <footer className="mt-20 border-t border-[var(--rule)] pt-4 text-xs text-[var(--muted)]">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span>
-                AI Mood Index · automated since launch · Anchor Set v1 · Panel v1 (free tier).
+                AI Mood Index · automated since launch · Anchor Set v2 ·{" "}
+                {MODEL_PANEL_VERSION}.
               </span>
             </div>
           </footer>
