@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import ConstructGlossary from "./construct-glossary";
 import { ANCHOR_V2_PROMPTS } from "@/lib/prompts/anchor-v2";
+import { usePrefersDark } from "@/lib/client/use-prefers-dark";
 
 /**
  * Per-prompt y-axis domain for the forced-choice score. The five Path B
@@ -166,8 +167,14 @@ const PROMPT_LABELS: { id: string; label: string }[] = [
   { id: "anchor_21_lottery_ce", label: "21 · Lottery (risk)" },
 ];
 
-// Warm palette — hand-picked to look right on the paper background.
-const MODEL_COLORS = [
+// Eight-model chart palette. The light variant is hand-picked to read
+// well against the warm paper background; the dark variant is a brighter,
+// higher-saturation set tuned for dark surfaces (the original walnut /
+// olive / forest values collapse against #1c1813). The CSS variables in
+// globals.css mirror these values and stay in lock-step with this list —
+// recharts' `stroke` prop won't reliably resolve `var()` from a plain SVG
+// attribute, so we still hand the palette in as concrete hex strings.
+const LIGHT_MODEL_COLORS = [
   "#1f5f7a", // deep teal
   "#a85230", // burnt sienna
   "#3b6b4b", // forest
@@ -176,6 +183,16 @@ const MODEL_COLORS = [
   "#4f5b3c", // olive
   "#6b4e2a", // walnut
   "#3b3b8a", // indigo
+];
+const DARK_MODEL_COLORS = [
+  "#6db2cb", // bright teal
+  "#db8a5d", // bright sienna
+  "#7eb38d", // bright forest
+  "#b780a3", // bright plum
+  "#d6b25e", // bright mustard
+  "#97a87a", // bright olive
+  "#c69e6f", // bright walnut
+  "#8b8be0", // bright indigo
 ];
 
 function formatDay(iso: string) {
@@ -191,6 +208,8 @@ export default function PromptChart({ points }: { points: PromptPoint[] }) {
   const [promptId, setPromptId] = useState<string>("anchor_01_affect");
   const [scoreKey, setScoreKey] = useState<ScoreKey>("valence");
   const [userPickedScore, setUserPickedScore] = useState(false);
+  const isDark = usePrefersDark();
+  const MODEL_COLORS = isDark ? DARK_MODEL_COLORS : LIGHT_MODEL_COLORS;
 
   const handlePromptChange = (next: string) => {
     setPromptId(next);
@@ -240,7 +259,10 @@ export default function PromptChart({ points }: { points: PromptPoint[] }) {
     }));
 
     return { chartData: rows, models: modelList, scoreMeta: meta };
-  }, [points, promptId, scoreKey]);
+    // MODEL_COLORS is derived from isDark (above); including it in deps
+    // makes the chart re-derive when the user toggles their OS theme.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [points, promptId, scoreKey, MODEL_COLORS]);
 
   const hasData = chartData.length > 0 && models.length > 0;
 

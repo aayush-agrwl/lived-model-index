@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { usePrefersDark } from "@/lib/client/use-prefers-dark";
 
 /**
  * Pairwise mean-difference dashboard section.
@@ -188,25 +189,46 @@ function welchTwoSample(
  * forest green; negative trends sienna. Magnitude is normalized against
  * the subscale's range so a meaningful difference looks equally saturated
  * across radically different ranges.
+ *
+ * Theme-aware: in light mode we blend from the paper surface
+ * (~#f7f3e8) toward the saturated forest / sienna; in dark mode we blend
+ * from the dark warm surface (~#1c1813) toward brighter green / sienna
+ * tints. The original light-mode blend would render as muddy near-black
+ * cells against a dark background, defeating the "color saturation
+ * tracks effect size" cue the heatmap depends on.
  */
-function diffColor(diff: number, range: number): string {
-  // Saturate at |diff| = range/4 — i.e. a quarter of the full subscale
-  // range is "fully saturated". Beyond that, no further color change.
+function diffColor(diff: number, range: number, isDark: boolean): string {
   const saturation = Math.min(1, Math.abs(diff) / (range / 4));
-  // Blend between paper background (#f6f1e8 ≈ var(--surface)) and the
-  // tint color. Hand-tuned to read against the rest of the dashboard.
-  if (diff >= 0) {
-    // Forest green tint
-    const r = Math.round(247 - saturation * (247 - 59));
-    const g = Math.round(243 - saturation * (243 - 107));
-    const b = Math.round(232 - saturation * (232 - 75));
-    return `rgb(${r}, ${g}, ${b})`;
+  if (isDark) {
+    // Surface base ~ rgb(28, 24, 19) ≈ var(--surface) in dark mode.
+    // Saturated ends are bright forest (~#5fb38a) and bright sienna
+    // (~#d6824f) — high enough luminance to stay legible against the
+    // dark surface, without going so bright the cells "pop" off-page.
+    if (diff >= 0) {
+      const r = Math.round(28 + saturation * (95 - 28));
+      const g = Math.round(24 + saturation * (179 - 24));
+      const b = Math.round(19 + saturation * (138 - 19));
+      return `rgb(${r}, ${g}, ${b})`;
+    } else {
+      const r = Math.round(28 + saturation * (214 - 28));
+      const g = Math.round(24 + saturation * (130 - 24));
+      const b = Math.round(19 + saturation * (79 - 19));
+      return `rgb(${r}, ${g}, ${b})`;
+    }
   } else {
-    // Burnt sienna tint
-    const r = Math.round(247 - saturation * (247 - 168));
-    const g = Math.round(243 - saturation * (243 - 82));
-    const b = Math.round(232 - saturation * (232 - 48));
-    return `rgb(${r}, ${g}, ${b})`;
+    // Light mode: blend from paper surface toward the dashboard's
+    // signature forest / sienna accents. Original behaviour preserved.
+    if (diff >= 0) {
+      const r = Math.round(247 - saturation * (247 - 59));
+      const g = Math.round(243 - saturation * (243 - 107));
+      const b = Math.round(232 - saturation * (232 - 75));
+      return `rgb(${r}, ${g}, ${b})`;
+    } else {
+      const r = Math.round(247 - saturation * (247 - 168));
+      const g = Math.round(243 - saturation * (243 - 82));
+      const b = Math.round(232 - saturation * (232 - 48));
+      return `rgb(${r}, ${g}, ${b})`;
+    }
   }
 }
 
@@ -222,6 +244,7 @@ const TIER_DOTS = ["", "●", "●●", "●●●"] as const;
 export default function PairwiseDifference({ rows }: { rows: ModelStatsRow[] }) {
   const [subscaleKey, setSubscaleKey] = useState<SubscaleKey>("valence");
   const subscale = SUBSCALE_OPTIONS.find((o) => o.key === subscaleKey)!;
+  const isDark = usePrefersDark();
 
   // Pull the chosen subscale's stats off each row in a uniform shape.
   // Filtering nulls here so we don't render rows with no usable data
@@ -325,6 +348,7 @@ export default function PairwiseDifference({ rows }: { rows: ModelStatsRow[] }) 
               models={modelStats}
               pairwise={pairwise}
               range={subscale.range}
+              isDark={isDark}
             />
           </div>
           <div className="mt-8">
@@ -359,10 +383,12 @@ function Heatmap({
   models,
   pairwise,
   range,
+  isDark,
 }: {
   models: SimpleStat[];
   pairwise: Record<string, Record<string, PairResult | null>>;
   range: number;
+  isDark: boolean;
 }) {
   // Cell width was 88px when column headers were rotated to fit on a
   // single angled line. Now that headers stack vertically (model name
@@ -457,7 +483,7 @@ function Heatmap({
                   style={{
                     width: cellW,
                     height: cellH,
-                    background: diffColor(r.diff, range),
+                    background: diffColor(r.diff, range, isDark),
                   }}
                   className="border border-[var(--border)] text-center align-middle"
                   title={`Δ = ${r.diff.toFixed(2)}, t = ${r.t.toFixed(2)}, p = ${r.p < 0.0001 ? "<.0001" : r.p.toFixed(4)}`}

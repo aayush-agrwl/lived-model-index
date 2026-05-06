@@ -11,6 +11,7 @@ import {
   Legend,
   Tooltip,
 } from "recharts";
+import { usePrefersDark } from "@/lib/client/use-prefers-dark";
 
 export type RadarRow = {
   modelSlug: string;
@@ -46,7 +47,12 @@ const AXES: {
   { axis: "Consistency", key: "consistency", min: 0, max: 5 },
 ];
 
-const MODEL_COLORS = [
+// Eight-model chart palette. Mirrored in prompt-chart.tsx and the CSS
+// variables in globals.css. The dark variant exists because the original
+// hand-picked palette (walnut, olive, deep teal, etc.) collapses against
+// dark surfaces — picking the wrong palette there leaves three models
+// visually indistinguishable.
+const LIGHT_MODEL_COLORS = [
   "#1f5f7a", // deep teal
   "#a85230", // burnt sienna
   "#3b6b4b", // forest
@@ -55,6 +61,16 @@ const MODEL_COLORS = [
   "#4f5b3c", // olive
   "#6b4e2a", // walnut
   "#3b3b8a", // indigo
+];
+const DARK_MODEL_COLORS = [
+  "#6db2cb", // bright teal
+  "#db8a5d", // bright sienna
+  "#7eb38d", // bright forest
+  "#b780a3", // bright plum
+  "#d6b25e", // bright mustard
+  "#97a87a", // bright olive
+  "#c69e6f", // bright walnut
+  "#8b8be0", // bright indigo
 ];
 
 function normalize(raw: number | null, min: number, max: number) {
@@ -68,6 +84,8 @@ export default function SubscaleRadar({ rows }: { rows: RadarRow[] }) {
   const [active, setActive] = useState<Set<string>>(
     () => new Set(rows.slice(0, 4).map((r) => r.modelSlug)),
   );
+  const isDark = usePrefersDark();
+  const MODEL_COLORS = isDark ? DARK_MODEL_COLORS : LIGHT_MODEL_COLORS;
 
   const toggle = (slug: string) => {
     setActive((prev) => {
@@ -92,7 +110,10 @@ export default function SubscaleRadar({ rows }: { rows: RadarRow[] }) {
       return row;
     });
     return { data: chart, colored };
-  }, [rows, active]);
+    // MODEL_COLORS is derived from isDark; including it in deps lets the
+    // radar re-derive when the user toggles their OS theme.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, active, MODEL_COLORS]);
 
   const hasData = rows.length > 0;
 

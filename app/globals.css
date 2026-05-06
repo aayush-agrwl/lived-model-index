@@ -12,6 +12,56 @@
   --rule: #cfc5ae;
   --accent: #7c3a1a;
   --accent-green: #3b6b4b;
+
+  /* Eight-model chart palette. Hand-picked to look right against the
+     warm paper background. The dark-mode block below redefines these
+     to a brighter, higher-saturation palette tuned for dark surfaces. */
+  --model-1: #1f5f7a; /* deep teal */
+  --model-2: #a85230; /* burnt sienna */
+  --model-3: #3b6b4b; /* forest */
+  --model-4: #6a3a5a; /* plum */
+  --model-5: #a67a1e; /* mustard */
+  --model-6: #4f5b3c; /* olive */
+  --model-7: #6b4e2a; /* walnut */
+  --model-8: #3b3b8a; /* indigo */
+}
+
+/*
+ * Dark-mode palette. Triggered by the user's OS-level color-scheme
+ * preference (no manual toggle yet). Goal: keep the warm-paper character
+ * of the project while staying legible against a dark background.
+ *
+ *   - Background and surface are a warm deep brown rather than pure
+ *     black; pairs naturally with the cream foreground and the existing
+ *     hero SVG (which has its own dark synthwave palette).
+ *   - Accents (sienna, forest) are shifted brighter so they read on the
+ *     dark surface — the original light-mode hex values would muddy.
+ *   - Model palette is rebuilt at higher luminance; the original hand-
+ *     picked palette (deep teal, walnut, etc.) collapses against dark.
+ *   - Border and rule are nudged warmer so the layout's structural lines
+ *     stay visible without becoming harsh.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #14110d;
+    --surface: #1c1813;
+    --foreground: #ece5d4;
+    --ink-2: #c4bca8;
+    --muted: #8d8675;
+    --border: #3a342a;
+    --rule: #4a4234;
+    --accent: #c97140;
+    --accent-green: #6ba37e;
+
+    --model-1: #6db2cb; /* bright teal */
+    --model-2: #db8a5d; /* bright sienna */
+    --model-3: #7eb38d; /* bright forest */
+    --model-4: #b780a3; /* bright plum */
+    --model-5: #d6b25e; /* bright mustard */
+    --model-6: #97a87a; /* bright olive */
+    --model-7: #c69e6f; /* bright walnut */
+    --model-8: #8b8be0; /* bright indigo */
+  }
 }
 
 html,
