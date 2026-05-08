@@ -1,4 +1,4 @@
-import { TwitterApi } from "twitter-api-v2";
+import { TwitterApi, ApiResponseError } from "twitter-api-v2";
 
 /**
  * OAuth1.0a user-context client for the @AIMoodIndex automation account.
@@ -21,10 +21,15 @@ interface TwitterEnv {
 }
 
 function readEnv(): TwitterEnv {
-  const apiKey = process.env.TWITTER_API_KEY;
-  const apiSecret = process.env.TWITTER_API_SECRET;
-  const accessToken = process.env.TWITTER_ACCESS_TOKEN;
-  const accessSecret = process.env.TWITTER_ACCESS_SECRET;
+  // Trim each env var defensively. The single most common cause of
+  // 401-Unauthorized from X on a freshly-set-up app is trailing
+  // whitespace, newlines, or surrounding quotes in the env-var values
+  // — the OAuth signature is computed over the literal key bytes, so
+  // a stray "\n" silently breaks every request.
+  const apiKey = process.env.TWITTER_API_KEY?.trim();
+  const apiSecret = process.env.TWITTER_API_SECRET?.trim();
+  const accessToken = process.env.TWITTER_ACCESS_TOKEN?.trim();
+  const accessSecret = process.env.TWITTER_ACCESS_SECRET?.trim();
 
   const missing: string[] = [];
   if (!apiKey) missing.push("TWITTER_API_KEY");
@@ -44,6 +49,32 @@ function readEnv(): TwitterEnv {
     accessToken: accessToken!,
     accessSecret: accessSecret!,
   };
+}
+
+/**
+ * Build a verbose, copy-paste-friendly diagnostic message for an X API
+ * error. The bare twitter-api-v2 default ("Request failed with code
+ * 401") hides the upstream error body, which is where the real reason
+ * lives — wrong scope, expired token, regenerated key, etc.
+ */
+function describeError(err: unknown): string {
+  if (err instanceof ApiResponseError) {
+    const status = err.code;
+    // err.data is the parsed body; X's V2 endpoints return an envelope
+    // like { title, detail, status, type } and V1.1 returns { errors:
+    // [{ code, message }, ...] }. We surface whichever shape is
+    // present.
+    const body = err.data as
+      | { title?: string; detail?: string; errors?: Array<{ code?: number; message?: string }> }
+      | undefined;
+    const v2Bits = [body?.title, body?.detail].filter(Boolean).join(" — ");
+    const v1Bits = body?.errors
+      ?.map((e) => `[${e.code ?? "?"}] ${e.message ?? ""}`)
+      .join("; ");
+    const detail = v2Bits || v1Bits || err.message || "(no detail)";
+    return `HTTP ${status}: ${detail}`;
+  }
+  return err instanceof Error ? err.message : String(err);
 }
 
 let cached: TwitterApi | null = null;
@@ -76,12 +107,19 @@ export async function verifyCredentials(): Promise<{
   userId: string;
   name: string;
 }> {
-  const me = await client().v2.me();
-  return {
-    username: me.data.username,
-    userId: me.data.id,
-    name: me.data.name,
-  };
+  try {
+    const me = await client().v2.me();
+    return {
+      username: me.data.username,
+      userId: me.data.id,
+      name: me.data.name,
+    };
+  } catch (err) {
+    // Re-throw with a verbose, X-detail-aware message. The default
+    // twitter-api-v2 message is opaque ("Request failed with code 401")
+    // and hides the underlying reason that the API actually returned.
+    throw new Error(`X verifyCredentials failed: ${describeError(err)}`);
+  }
 }
 
 /**
@@ -106,6 +144,10 @@ export async function postTweet(text: string): Promise<{
         `Truncate or shorten upstream of this call.`,
     );
   }
-  const result = await client().v2.tweet(text);
-  return { tweetId: result.data.id, text: result.data.text };
+  try {
+    const result = await client().v2.tweet(text);
+    return { tweetId: result.data.id, text: result.data.text };
+  } catch (err) {
+    throw new Error(`X postTweet failed: ${describeError(err)}`);
+  }
 }
