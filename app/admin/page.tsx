@@ -137,6 +137,14 @@ export default function AdminPage() {
           >
             Bootstrap + kick tick
           </ActionButton>
+          <ActionButton
+            disabled={busy !== null}
+            onClick={() =>
+              callEndpoint("/api/admin/twitter/verify", "twitter verify")
+            }
+          >
+            Verify X credentials
+          </ActionButton>
         </div>
       </section>
 
