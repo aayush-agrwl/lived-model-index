@@ -145,6 +145,14 @@ export default function AdminPage() {
           >
             Verify X credentials
           </ActionButton>
+          <ActionButton
+            disabled={busy !== null}
+            onClick={() =>
+              callEndpoint("/api/admin/twitter/debug", "twitter env debug")
+            }
+          >
+            Debug X env vars
+          </ActionButton>
         </div>
       </section>
 
