@@ -197,12 +197,49 @@ export const responses = pgTable(
   }),
 );
 
+/**
+ * Posted-tweets log.
+ *
+ * Records every tweet the @AIMoodIndex bot posts. Primarily a
+ * deduplication device: the daily-tweet selection logic excludes any
+ * response whose id appears here, so a manual trigger plus the cron-
+ * scheduled trigger on the same day cannot post the same quote twice.
+ *
+ * tweetId is X's returned tweet id (string-typed because X ids exceed
+ * 2^53 and are unsafe as JS numbers). responseId references the
+ * responses.id whose notable_quote was tweeted. text is the literal
+ * 280-char body that was posted, kept for audit.
+ */
+export const tweets = pgTable(
+  "tweets",
+  {
+    id: serial("id").primaryKey(),
+    responseId: integer("response_id")
+      .references(() => responses.id)
+      .notNull(),
+    tweetId: text("tweet_id").notNull(),
+    text: text("text").notNull(),
+    postedAt: timestamp("posted_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    // One tweet per response, ever — the dedup invariant.
+    uniqTweetPerResponse: uniqueIndex("uniq_tweet_per_response").on(
+      table.responseId,
+    ),
+    idxTweetsPostedAt: index("idx_tweets_posted_at").on(table.postedAt),
+  }),
+);
+
 export type PromptSet = typeof promptSets.$inferSelect;
 export type Prompt = typeof prompts.$inferSelect;
 export type Run = typeof runs.$inferSelect;
 export type Response = typeof responses.$inferSelect;
+export type Tweet = typeof tweets.$inferSelect;
 
 export type NewPromptSet = typeof promptSets.$inferInsert;
 export type NewPrompt = typeof prompts.$inferInsert;
 export type NewRun = typeof runs.$inferInsert;
 export type NewResponse = typeof responses.$inferInsert;
+export type NewTweet = typeof tweets.$inferInsert;

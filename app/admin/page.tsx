@@ -153,6 +153,23 @@ export default function AdminPage() {
           >
             Debug X env vars
           </ActionButton>
+          <ActionButton
+            disabled={busy !== null}
+            onClick={() =>
+              callEndpoint(
+                "/api/cron/tweet?dryRun=true",
+                "tweet preview (dry run)",
+              )
+            }
+          >
+            Preview today's tweet
+          </ActionButton>
+          <ActionButton
+            disabled={busy !== null}
+            onClick={() => callEndpoint("/api/cron/tweet", "tweet post")}
+          >
+            Post today's tweet
+          </ActionButton>
         </div>
       </section>
 
