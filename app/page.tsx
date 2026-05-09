@@ -282,7 +282,6 @@ export default async function HomePage() {
               <Kpi
                 label="Success rate · 7d"
                 value={kpis?.successPct != null ? `${kpis.successPct}%` : "—"}
-                sub={`${kpis?.flagsLast7d.incoherent ?? 0} incoherent · ${kpis?.flagsLast7d.refusal ?? 0} refusal`}
               />
               <Kpi
                 label="Avg valence · 7d"
