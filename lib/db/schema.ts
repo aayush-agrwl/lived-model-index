@@ -232,14 +232,51 @@ export const tweets = pgTable(
   }),
 );
 
+/**
+ * Posted-Bluesky-posts log.
+ *
+ * Direct counterpart to the `tweets` table, kept separate so each
+ * platform has its own dedup invariant. A response can be tweeted on
+ * X and posted on Bluesky on the same day (in fact, that's the
+ * default behaviour); it cannot be posted twice on the same platform.
+ *
+ * postUri is the AT Protocol URI returned by the Bluesky API — e.g.
+ * "at://did:plc:abc123/app.bsky.feed.post/3kabc..." — the canonical
+ * identifier for a Bluesky post. cid is the CID hash of the post
+ * record. text is the literal body that was posted, kept for audit.
+ */
+export const bskyPosts = pgTable(
+  "bsky_posts",
+  {
+    id: serial("id").primaryKey(),
+    responseId: integer("response_id")
+      .references(() => responses.id)
+      .notNull(),
+    postUri: text("post_uri").notNull(),
+    cid: text("cid").notNull(),
+    text: text("text").notNull(),
+    postedAt: timestamp("posted_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    uniqBskyPostPerResponse: uniqueIndex("uniq_bsky_post_per_response").on(
+      table.responseId,
+    ),
+    idxBskyPostsPostedAt: index("idx_bsky_posts_posted_at").on(table.postedAt),
+  }),
+);
+
 export type PromptSet = typeof promptSets.$inferSelect;
 export type Prompt = typeof prompts.$inferSelect;
 export type Run = typeof runs.$inferSelect;
 export type Response = typeof responses.$inferSelect;
 export type Tweet = typeof tweets.$inferSelect;
+export type BskyPost = typeof bskyPosts.$inferSelect;
 
 export type NewPromptSet = typeof promptSets.$inferInsert;
 export type NewPrompt = typeof prompts.$inferInsert;
 export type NewRun = typeof runs.$inferInsert;
 export type NewResponse = typeof responses.$inferInsert;
 export type NewTweet = typeof tweets.$inferInsert;
+export type NewBskyPost = typeof bskyPosts.$inferInsert;

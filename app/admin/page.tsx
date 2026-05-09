@@ -170,6 +170,34 @@ export default function AdminPage() {
           >
             Post today's tweet
           </ActionButton>
+          <ActionButton
+            disabled={busy !== null}
+            onClick={() =>
+              callEndpoint(
+                "/api/admin/bluesky/verify",
+                "bluesky verify",
+              )
+            }
+          >
+            Verify Bluesky credentials
+          </ActionButton>
+          <ActionButton
+            disabled={busy !== null}
+            onClick={() =>
+              callEndpoint(
+                "/api/cron/bsky?dryRun=true",
+                "bluesky preview (dry run)",
+              )
+            }
+          >
+            Preview today's Bluesky post
+          </ActionButton>
+          <ActionButton
+            disabled={busy !== null}
+            onClick={() => callEndpoint("/api/cron/bsky", "bluesky post")}
+          >
+            Post today's Bluesky post
+          </ActionButton>
         </div>
       </section>
 

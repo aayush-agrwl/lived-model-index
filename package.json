@@ -17,6 +17,7 @@
     "db:seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
+    "@atproto/api": "^0.19.16",
     "@neondatabase/serverless": "^0.9.4",
     "drizzle-orm": "^0.33.0",
     "next": "^14.2.15",

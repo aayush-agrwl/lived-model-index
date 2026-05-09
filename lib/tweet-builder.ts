@@ -124,25 +124,41 @@ export function formatTweet(candidate: TweetCandidate): FormattedTweet {
 }
 
 /**
- * Pick the most intense un-tweeted notable quote from the lookback
+ * The two social platforms supported by the post-builder. Each has its
+ * own dedup table; the rest of the pipeline (filters, ranking, format)
+ * is identical between them.
+ */
+export type SocialPlatform = "x" | "bluesky";
+
+/**
+ * Pick the most intense un-posted notable quote from the lookback
  * window, formatted ready to post. Returns null when no candidate
  * passes the filters — the cron endpoint treats null as "post nothing
- * today" rather than degrading the tweet.
+ * today" rather than degrading the post.
+ *
+ * The `platform` parameter selects which dedup table to exclude
+ * already-posted responses against. X and Bluesky are tracked
+ * separately, so the same response can land on both platforms on the
+ * same day; running this with a different platform won't double-post
+ * within a platform.
  */
 export async function selectTweet(
   hours: number = DEFAULT_LOOKBACK_HOURS,
+  platform: SocialPlatform = "x",
 ): Promise<FormattedTweet | null> {
   const database = db();
   const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
-  // Collect already-tweeted response ids so we can exclude them.
-  // SQL-NOT-IN with an empty list throws in some Postgres versions;
-  // notInArray with [] is safe via Drizzle but we sidestep the
-  // question by short-circuiting when empty.
-  const alreadyTweeted = await database
-    .select({ responseId: schema.tweets.responseId })
-    .from(schema.tweets);
-  const excludedIds = alreadyTweeted.map((r) => r.responseId);
+  // Collect already-posted response ids on THIS platform so we can
+  // exclude them. The two tables (tweets / bsky_posts) have the same
+  // shape and the same response_id column, so we can switch which one
+  // we read against without changing the downstream logic.
+  const dedupTable =
+    platform === "x" ? schema.tweets : schema.bskyPosts;
+  const alreadyPosted = await database
+    .select({ responseId: dedupTable.responseId })
+    .from(dedupTable);
+  const excludedIds = alreadyPosted.map((r) => r.responseId);
 
   // Compose the filter. The intensity ordering is arousal DESC,
   // |valence| DESC — same as the dashboard's dailyNotableQuotes.
