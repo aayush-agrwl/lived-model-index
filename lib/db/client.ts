@@ -56,15 +56,18 @@ export function db() {
   if (_db) return _db;
   const baseSql = neon(getDatabaseUrl());
   // Proxy-wrap the neon sql function so every call through Drizzle
-  // (which delegates to this function for each query) gets up to four
-  // attempts with exponential backoff on retryable errors. Worst case
-  // total backoff: 100 + 200 + 400 = 700 ms before the fourth attempt
-  // is allowed to fail through. Non-retryable errors (schema
-  // violations, bad SQL, auth) still throw immediately on attempt 1.
+  // gets up to five attempts with exponential backoff on retryable
+  // errors. Schedule: 250 ms, 500 ms, 1 s, 2 s — worst case total
+  // ~3.75 s before the fifth attempt is allowed to fail through.
+  // The earlier 700 ms ceiling was too short to cover a Neon control-
+  // plane hiccup that lasted a few seconds; the longer schedule trades
+  // some page-load latency on bad days for resilience to those
+  // hiccups. Non-retryable errors (schema violations, bad SQL, auth)
+  // still throw immediately on attempt 1.
   const sqlWithRetry = new Proxy(baseSql, {
     apply: async (target, thisArg, args: unknown[]) => {
       let lastErr: unknown;
-      for (let attempt = 0; attempt < 4; attempt++) {
+      for (let attempt = 0; attempt < 5; attempt++) {
         try {
           return await Reflect.apply(
             target as (...a: unknown[]) => Promise<unknown>,
@@ -73,8 +76,8 @@ export function db() {
           );
         } catch (err) {
           lastErr = err;
-          if (!isNeonRetryable(err) || attempt === 3) throw err;
-          await sleep(100 * Math.pow(2, attempt));
+          if (!isNeonRetryable(err) || attempt === 4) throw err;
+          await sleep(250 * Math.pow(2, attempt));
         }
       }
       throw lastErr;

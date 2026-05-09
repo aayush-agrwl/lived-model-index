@@ -5,8 +5,13 @@ import {
 } from "@/lib/queries";
 import { todayStatus } from "@/lib/orchestration";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+// Operational page: cache for 30 seconds. The collect/rate progress
+// figures shown on this page can lag the live state by up to half a
+// minute, which is well within the operator's tolerance for "is the
+// pipeline actually running" — and the cache absorbs the connection
+// churn that comes with anyone refreshing the page during an active
+// tick window.
+export const revalidate = 30;
 
 export const metadata = {
   title: "Health · AI Mood Index",

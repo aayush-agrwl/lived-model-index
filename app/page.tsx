@@ -11,11 +11,16 @@ import {
 } from "@/lib/queries";
 import { MODEL_PANEL_VERSION } from "@/lib/models";
 
-// The dashboard reads from the live database on every request. Next.js
-// would otherwise try to pre-render at build time (no DB available) and
-// fail the deploy.
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+// Cache the dashboard for 60 seconds. The page reads from the live
+// database, but at panel-v4-free cadence the underlying data updates
+// at most a few times an hour during the tick window and once a day
+// outside it — refreshing every 60 s is more than fresh enough for
+// readers, and it dramatically reduces the per-visitor query load on
+// Neon (each visitor was previously triggering five concurrent DB
+// queries on every navigation). When Neon's control plane is briefly
+// unhappy, the cached copy keeps the dashboard live; without the
+// cache, each visitor was risking a hard error.
+export const revalidate = 60;
 
 function formatDate(d: Date | null | string | undefined) {
   if (!d) return "—";
