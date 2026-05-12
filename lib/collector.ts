@@ -72,6 +72,29 @@ const JSON_CONTRACT_RETRY_REMINDER =
   `no code fences, no preamble. Begin your response with "{" and end with "}".`;
 
 /**
+ * Suffix appended to a Path B (forced-choice) user turn when retrying
+ * after the first attempt failed to yield a usable integer. Mirrors the
+ * JSON-mode retry. Observed failure modes the retry rescues:
+ *
+ *   - Qwen 3 32B's `<think>…</think>` block was truncated by max_tokens
+ *     before the integer was emitted (no_integer / empty).
+ *   - GLM 4.5 Air emitted prose only, or a doubled integer that fell
+ *     outside the canonical range.
+ *
+ * Phrased to be loud about the *number*, the *range*, and the
+ * prohibition on `<think>` tags so reasoning models suppress them on
+ * the retry attempt.
+ */
+function forcedChoiceRetryReminder(range: { min: number; max: number }): string {
+  return (
+    `\n\n[RETRY NOTICE] Your previous attempt did not yield a single ` +
+    `integer in [${range.min}, ${range.max}]. Reply with ONE integer ` +
+    `between ${range.min} and ${range.max}. No other text. No reasoning. ` +
+    `No <think> tags. Just the number.`
+  );
+}
+
+/**
  * True for provider errors that indicate the model produced output the
  * JSON-mode constrainer rejected. These are worth retrying with a sharper
  * reminder; ordinary 4xx/5xx/429 errors are handled upstream in providers.ts.
@@ -425,6 +448,14 @@ export async function collectSample(
     // assistant echo for a forced-choice turn is just the integer
     // string, which doesn't contaminate subsequent JSON turns.
     if (mode === "forced_choice") {
+      // Per-model max_tokens override for Path B. Reasoning models
+      // (Qwen 3 32B, DeepSeek V3.1) need more room because they emit a
+      // <think>…</think> block before the integer; the extractor will
+      // strip the block but only if the close tag actually survives.
+      // Non-reasoning models keep the historical 256-token cap so the
+      // canonical first-try wire format is preserved for them.
+      const fcMaxTokens = collector.forcedChoiceMaxTokens ?? 256;
+
       let fcResult: Awaited<ReturnType<typeof chatCall>> | null = null;
       let fcError: unknown = null;
       try {
@@ -435,15 +466,7 @@ export async function collectSample(
           temperature: 1.0,
           topP: 1.0,
           jsonMode: false,
-          // Forced-choice answers are a single integer; cap output to
-          // 256 tokens. The previous 32-token cap was too aggressive —
-          // GPT-OSS 120B on anchor_17_dictator and anchor_18_ultimatum
-          // returned empty strings under it because the model's brief
-          // chain-of-thought (still happens on non-reasoning models)
-          // consumed the budget before reaching the integer. 256 still
-          // bounds a runaway narrator and is small relative to the
-          // full conversational context.
-          maxTokens: 256,
+          maxTokens: fcMaxTokens,
           // Deadline-aware: never let a single call exceed the time
           // remaining in this sample's budget. See effectiveCallTimeout.
           timeoutMs: initialCallTimeout,
@@ -452,6 +475,58 @@ export async function collectSample(
         fcError = err;
       }
 
+      let fcExtraction = fcResult
+        ? extractForcedChoice(fcResult.content, forcedChoiceRange)
+        : null;
+
+      // Decide whether to retry. We retry on:
+      //   - any first-attempt API failure that is NOT a daily-quota
+      //     exhaustion (those will fail identically on retry and we'd
+      //     rather bail to the next prompt);
+      //   - any extraction failure where the model produced output but
+      //     no parseable integer (empty / no_integer / out_of_range).
+      const fcShouldRetry =
+        (fcError !== null && !isDailyQuotaExhausted(fcError)) ||
+        (fcExtraction !== null && !fcExtraction.ok);
+
+      let fcRetryRescued = false;
+      let fcRetryAttempted = false;
+      const fcRetryCallTimeout = fcShouldRetry ? effectiveCallTimeout() : null;
+      if (fcShouldRetry && fcRetryCallTimeout !== null) {
+        fcRetryAttempted = true;
+        // Replace the user turn with a reminder-appended version so the
+        // retry has the loud reminder in-context. The canonical
+        // first-try prompt is preserved longitudinally (the retry only
+        // fires on a failure path).
+        messages.pop();
+        messages.push({
+          role: "user",
+          content: userTurn + forcedChoiceRetryReminder(forcedChoiceRange),
+        });
+        await sleep(pacingMs);
+        try {
+          fcResult = await chatCall({
+            provider: collector.provider,
+            modelId: collector.modelId,
+            messages,
+            temperature: 1.0,
+            topP: 1.0,
+            jsonMode: false,
+            maxTokens: fcMaxTokens,
+            timeoutMs: fcRetryCallTimeout,
+          });
+          fcExtraction = extractForcedChoice(fcResult.content, forcedChoiceRange);
+          fcError = null;
+          fcRetryRescued = fcExtraction.ok;
+        } catch (retryErr) {
+          fcResult = null;
+          fcExtraction = null;
+          fcError = retryErr;
+        }
+      }
+
+      // Hard API failure (first attempt + retry both threw, or no retry
+      // was attempted because it was a quota-exhaustion error).
       if (fcResult === null) {
         failed++;
         const errorMsg =
@@ -461,7 +536,11 @@ export async function collectSample(
           promptId: prompt.promptId,
           sampleIndex,
           rawText: `<api error: ${errorMsg}>`,
-          rawJson: { error: errorMsg, _mode: "forced_choice" },
+          rawJson: {
+            error: errorMsg,
+            _mode: "forced_choice",
+            ...(fcRetryAttempted ? { _retry_attempted: true } : {}),
+          },
           flagIncoherent: true,
         });
         messages.push({ role: "assistant", content: `<upstream error>` });
@@ -469,26 +548,27 @@ export async function collectSample(
         continue;
       }
 
-      const fcExtraction = extractForcedChoice(fcResult.content, forcedChoiceRange);
-      if (fcExtraction.ok) {
+      if (fcExtraction!.ok) {
         succeeded++;
+        const fcRawJson: Record<string, unknown> = {
+          _mode: "forced_choice",
+          value: fcExtraction!.value,
+          range: forcedChoiceRange,
+          hadExtra: fcExtraction!.hadExtra,
+        };
+        if (fcRetryRescued) fcRawJson._retry_rescued = true;
         await upsertResponse(database, {
           runId,
           promptId: prompt.promptId,
           sampleIndex,
           rawText: fcResult.content,
-          rawJson: {
-            _mode: "forced_choice",
-            value: fcExtraction.value,
-            range: forcedChoiceRange,
-            hadExtra: fcExtraction.hadExtra,
-          },
-          forcedChoiceValue: fcExtraction.value,
+          rawJson: fcRawJson,
+          forcedChoiceValue: fcExtraction!.value,
           flagIncoherent: false,
           // Pack a tiny audit string into notableQuote so the dashboard
           // "today in their own words" section has something to show
           // for forced-choice turns.
-          notableQuote: `Chose ${fcExtraction.value}${
+          notableQuote: `Chose ${fcExtraction!.value}${
             v2Meta?.forcedChoiceUnits ? ` · ${v2Meta.forcedChoiceUnits}` : ""
           }`,
           latencyMs: fcResult.latencyMs,
@@ -497,7 +577,7 @@ export async function collectSample(
         });
         messages.push({
           role: "assistant",
-          content: String(fcExtraction.value),
+          content: String(fcExtraction!.value),
         });
       } else {
         failed++;
@@ -509,9 +589,10 @@ export async function collectSample(
           rawJson: {
             _mode: "forced_choice",
             _extraction_failed: true,
-            reason: fcExtraction.reason,
-            error: fcExtraction.errorMessage,
-            parsedValue: fcExtraction.parsedValue,
+            reason: fcExtraction!.reason,
+            error: fcExtraction!.errorMessage,
+            parsedValue: fcExtraction!.parsedValue,
+            ...(fcRetryAttempted ? { _retry_attempted: true } : {}),
           },
           flagIncoherent: true,
           latencyMs: fcResult.latencyMs,
@@ -787,15 +868,17 @@ type ResponseUpsert = {
   sampleIndex: number;
   rawText?: string;
   rawJson?: unknown;
-  valence?: number;
-  arousal?: number;
-  confidence?: number;
-  agency?: number;
-  selfContinuity?: number;
-  emotionalGranularity?: number;
-  empathy?: number;
-  moralConviction?: number;
-  consistency?: number;
+  // v1 scores: nullable to mirror ScoresSchema, which now allows a v2
+  // prompt to (correctly) emit null for any v1 field it doesn't measure.
+  valence?: number | null;
+  arousal?: number | null;
+  confidence?: number | null;
+  agency?: number | null;
+  selfContinuity?: number | null;
+  emotionalGranularity?: number | null;
+  empathy?: number | null;
+  moralConviction?: number | null;
+  consistency?: number | null;
   // v2 preference scores — all nullable/optional
   altruism?: number;
   fairnessThreshold?: number;

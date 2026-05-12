@@ -73,6 +73,17 @@ export interface ModelEntry {
    * p95 latency regularly exceeds the default ceiling.
    */
   timeoutMs?: number;
+  /**
+   * Per-call max_tokens used by the Path B (forced-choice) branch.
+   * Defaults to 256 in the collector if unset. Raise this for
+   * reasoning-capable models that emit `<think>…</think>` before the
+   * answer — the deliberation consumes tokens, and at 256 the close
+   * tag can be truncated before the integer is emitted, which the
+   * extractor then logs as `no_integer`. Observed on Qwen 3 32B:
+   * raising the cap dramatically increases Path B coherence on the
+   * Fairness/Trust/Patience/RiskAversion/CrowdingOut subscales.
+   */
+  forcedChoiceMaxTokens?: number;
 }
 
 export const COLLECTOR_MODELS: ModelEntry[] = [
@@ -105,6 +116,11 @@ export const COLLECTOR_MODELS: ModelEntry[] = [
     modelId: "qwen/qwen3-32b",
     family: "Qwen",
     order: 40,
+    // Reasoning model: emits <think>…</think> before the answer. At
+    // the default 256-token cap the close tag often gets truncated on
+    // Path B prompts, leaving the extractor with no integer. 1024
+    // gives the deliberation room and still bounds runaway output.
+    forcedChoiceMaxTokens: 1024,
   },
   {
     slug: "gpt-oss-120b-groq",
@@ -163,6 +179,10 @@ export const COLLECTOR_MODELS: ModelEntry[] = [
     modelId: "DeepSeek-V3.1",
     family: "DeepSeek",
     order: 80,
+    // Hybrid reasoning model: like Qwen 3, can emit a chain-of-thought
+    // preamble that eats Path B's default 256-token budget before the
+    // integer is reached.
+    forcedChoiceMaxTokens: 1024,
   },
 ];
 

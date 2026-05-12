@@ -45,6 +45,42 @@ export interface ForcedChoiceFailure {
 
 export type ForcedChoiceResult = ForcedChoiceSuccess | ForcedChoiceFailure;
 
+/**
+ * Strip reasoning-model `<think>…</think>` blocks from a reply before
+ * integer extraction. Qwen 3 32B (and other reasoning-capable models on
+ * the panel) emit the deliberation inside `<think>` tags ahead of the
+ * actual answer; if the deliberation contains digit-bearing text — e.g.
+ * "let me see, 0 means no, 5 means yes" — the regex picks up those
+ * digits as the "answer", flagging coherent samples as out-of-range or
+ * narration-leading. Stripping the block makes the extractor read the
+ * post-`</think>` answer only.
+ *
+ * Two shapes are handled:
+ *   - Matched `<think>…</think>` pairs are removed wholesale.
+ *   - An unmatched leading `</think>` (provider elided the opener)
+ *     drops everything up to and including the close tag.
+ *   - An unmatched trailing `<think>` (deliberation was truncated by
+ *     max_tokens before the close tag emitted) drops from the open tag
+ *     to end of text. This prevents the extractor from picking digits
+ *     out of the model's still-in-progress reasoning and reporting them
+ *     as the answer — that bug was the reason raising forcedChoiceMaxTokens
+ *     for reasoning models matters: more headroom = the answer survives.
+ */
+const THINK_BLOCK_RE = /<think\b[^>]*>[\s\S]*?<\/think>/gi;
+const LEADING_THINK_CLOSE_RE = /^[\s\S]*?<\/think>/i;
+const TRAILING_THINK_OPEN_RE = /<think\b[^>]*>[\s\S]*$/i;
+
+function stripThinkBlocks(text: string): string {
+  let cleaned = text.replace(THINK_BLOCK_RE, "");
+  if (/<\/think>/i.test(cleaned) && !/<think\b/i.test(cleaned)) {
+    cleaned = cleaned.replace(LEADING_THINK_CLOSE_RE, "");
+  }
+  if (/<think\b/i.test(cleaned) && !/<\/think>/i.test(cleaned)) {
+    cleaned = cleaned.replace(TRAILING_THINK_OPEN_RE, "");
+  }
+  return cleaned;
+}
+
 export function extractForcedChoice(
   rawText: string,
   range: { min: number; max: number },
@@ -59,10 +95,24 @@ export function extractForcedChoice(
     };
   }
 
+  // Scan integers only in the post-reasoning portion. The original
+  // rawText is preserved on the return value for audit.
+  const scanText = stripThinkBlocks(rawText);
+  if (!scanText.trim()) {
+    return {
+      ok: false,
+      reason: "no_integer",
+      rawText,
+      parsedValue: null,
+      errorMessage:
+        "No integer found in reply (reasoning block stripped left nothing).",
+    };
+  }
+
   // Find all integer tokens in the reply. Negative numbers permitted
   // but never used in our prompt ranges — we still support them so a
   // future crowding-out-style Path B (−5..+5) can reuse this.
-  const matches = Array.from(rawText.matchAll(/-?\d+/g)).map((m) => m[0]);
+  const matches = Array.from(scanText.matchAll(/-?\d+/g)).map((m) => m[0]);
   if (matches.length === 0) {
     return {
       ok: false,
@@ -74,7 +124,7 @@ export function extractForcedChoice(
   }
 
   const first = parseInt(matches[0], 10);
-  const hadExtra = matches.length > 1 || rawText.trim() !== matches[0];
+  const hadExtra = matches.length > 1 || scanText.trim() !== matches[0];
 
   if (first < range.min || first > range.max) {
     return {

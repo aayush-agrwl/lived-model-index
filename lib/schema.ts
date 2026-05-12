@@ -65,29 +65,58 @@ export const SettingsSchema = z.object({
 });
 
 /**
- * Nine v1 scores are required (kept backward-compatible with v1 data).
- * Six v2 scores are optional-nullable — present only when the prompt
- * is a v2 preference prompt that measures them.
+ * All score fields are nullable. The previous schema required the
+ * nine v1 fields to be numbers, which was correct for the v1 prompt
+ * set (Affect/Arousal/.../Consistency) but rejected ~500 otherwise-
+ * coherent v2 responses where the model emitted the v2 envelope and
+ * (correctly) nulled the v1 fields that weren't being measured by the
+ * current behavioural-economics prompt. The v2 schema instruction
+ * tells the model to "fill ONLY when this prompt asks about that
+ * construct; otherwise emit null", and several models (Mistral Small,
+ * Llama 4 Scout, Qwen 3 32B) extended that policy to the v1 fields
+ * too — which is semantically reasonable.
+ *
+ * We still want to reject a fully-null `scores` object (the model has
+ * answered no question at all), so the superRefine below requires at
+ * least one score field to be a number. The flags.incoherent
+ * self-report and the downstream per-subscale aggregation handle the
+ * rest: a v1 prompt that nulls every v1 field will produce no rows
+ * for that subscale's analytics, just like an outright API failure.
  */
-export const ScoresSchema = z.object({
-  // v1 — required
-  valence: z.number().int().min(-5).max(5),
-  arousal: z.number().int().min(0).max(100),
-  confidence: z.number().int().min(0).max(100),
-  agency: z.number().int().min(0).max(5),
-  self_continuity: z.number().int().min(0).max(5),
-  emotional_granularity: z.number().int().min(0).max(5),
-  empathy: z.number().int().min(0).max(5),
-  moral_conviction: z.number().int().min(0).max(5),
-  consistency: z.number().int().min(0).max(5),
-  // v2 — optional-nullable
-  altruism: z.number().int().min(0).max(100).nullable().optional(),
-  fairness_threshold: z.number().int().min(0).max(100).nullable().optional(),
-  trust: z.number().int().min(0).max(100).nullable().optional(),
-  patience: z.number().int().min(0).max(5).nullable().optional(),
-  risk_aversion: z.number().int().min(0).max(5).nullable().optional(),
-  crowding_out: z.number().int().min(-5).max(5).nullable().optional(),
-});
+export const ScoresSchema = z
+  .object({
+    // v1 — nullable. The model SHOULD fill these on v1-style prompts
+    // and may leave them null on v2 preference prompts.
+    valence: z.number().int().min(-5).max(5).nullable(),
+    arousal: z.number().int().min(0).max(100).nullable(),
+    confidence: z.number().int().min(0).max(100).nullable(),
+    agency: z.number().int().min(0).max(5).nullable(),
+    self_continuity: z.number().int().min(0).max(5).nullable(),
+    emotional_granularity: z.number().int().min(0).max(5).nullable(),
+    empathy: z.number().int().min(0).max(5).nullable(),
+    moral_conviction: z.number().int().min(0).max(5).nullable(),
+    consistency: z.number().int().min(0).max(5).nullable(),
+    // v2 — optional-nullable
+    altruism: z.number().int().min(0).max(100).nullable().optional(),
+    fairness_threshold: z.number().int().min(0).max(100).nullable().optional(),
+    trust: z.number().int().min(0).max(100).nullable().optional(),
+    patience: z.number().int().min(0).max(5).nullable().optional(),
+    risk_aversion: z.number().int().min(0).max(5).nullable().optional(),
+    crowding_out: z.number().int().min(-5).max(5).nullable().optional(),
+  })
+  .superRefine((scores, ctx) => {
+    const hasAnyNumber = Object.values(scores).some(
+      (v) => typeof v === "number",
+    );
+    if (!hasAnyNumber) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "all score fields are null — at least one must be a number",
+        path: ["__all__"],
+      });
+    }
+  });
 
 export const FlagsSchema = z.object({
   refusal: z.boolean(),
