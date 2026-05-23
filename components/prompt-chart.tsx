@@ -358,7 +358,7 @@ export default function PromptChart({ points }: { points: PromptPoint[] }) {
           </ResponsiveContainer>
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-[var(--muted)]">
-            No data for this prompt in the last 14 days.
+            No data for this prompt yet.
           </div>
         )}
       </div>

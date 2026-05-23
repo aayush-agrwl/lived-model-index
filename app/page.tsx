@@ -50,7 +50,13 @@ export default async function HomePage() {
   try {
     const [k, pp, rr, q, pw] = await Promise.all([
       kpiSummary(),
-      perPromptScores(14).catch(
+      // `null` here means "no date filter" — show every per-prompt
+      // observation we've ever collected. We used to clip to the last
+      // 14 days to keep the chart legible, but the longer the index
+      // runs the more interesting the full longitudinal record gets,
+      // and recharts handles a few hundred points per series without
+      // strain.
+      perPromptScores(null).catch(
         (e) =>
           recordWarning("perPromptScores", e) as Awaited<
             ReturnType<typeof perPromptScores>
@@ -323,8 +329,8 @@ export default async function HomePage() {
               </section>
             )}
 
-            <PromptChart points={promptPoints} />
             <PairwiseDifference rows={pairwiseRows} />
+            <PromptChart points={promptPoints} />
             <SubscaleRadar rows={radarRows} />
           </>
         )}

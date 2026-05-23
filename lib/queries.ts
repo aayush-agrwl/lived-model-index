@@ -158,10 +158,24 @@ export async function responseById(id: number) {
  * Per-prompt daily averages, one row per (day, promptId, model), with every
  * self-report score averaged. The dashboard uses this to let visitors slice
  * the chart by prompt + score.
+ *
+ * Pass `days = null` to skip the date filter entirely and return every row
+ * the index has ever collected. This is the mode the home-page chart uses
+ * now that we want the full longitudinal record visible by default rather
+ * than a rolling 14-day window.
  */
-export async function perPromptScores(days = 14) {
+export async function perPromptScores(days: number | null = 14) {
   const database = db();
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  // Drizzle treats `undefined` passed to `.where()` as a no-op, so a
+  // null `days` sentinel cleanly disables the date filter without
+  // having to branch the query builder itself.
+  const sinceFilter =
+    days == null
+      ? undefined
+      : gte(
+          schema.responses.createdAt,
+          new Date(Date.now() - days * 24 * 60 * 60 * 1000),
+        );
 
   const rows = await database
     .select({
@@ -192,7 +206,7 @@ export async function perPromptScores(days = 14) {
     })
     .from(schema.responses)
     .innerJoin(schema.runs, eq(schema.runs.id, schema.responses.runId))
-    .where(gte(schema.responses.createdAt, since))
+    .where(sinceFilter)
     .groupBy(
       sql`DATE(${schema.responses.createdAt})`,
       schema.responses.promptId,
