@@ -20,6 +20,9 @@ on:
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
+    permissions:
+      # Needed so the keepalive step below can push its empty commit.
+      contents: write
     steps:
       - name: POST /api/cron/daily
         # Why these curl flags:
@@ -70,3 +73,33 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           SITE_URL: ${{ secrets.SITE_URL }}
+
+      # --- Keepalive -------------------------------------------------------
+      # GitHub auto-disables cron/scheduled workflows after 60 days with no
+      # *commit* activity in the repo — workflow *runs* don't count. Because
+      # this repo's automation is self-sustaining (nobody pushes for weeks),
+      # both daily.yml and tick.yml drift toward that threshold. The two
+      # steps below make an empty commit ONLY when the newest commit is more
+      # than 50 days old, resetting the 60-day clock for every workflow in
+      # the repo without cluttering history with a daily commit.
+      - name: Checkout (for keepalive)
+        if: always()
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Keepalive commit if repo is going stale
+        if: always()
+        run: |
+          LAST_COMMIT_TS=$(git log -1 --format=%ct)
+          NOW_TS=$(date +%s)
+          AGE_DAYS=$(( (NOW_TS - LAST_COMMIT_TS) / 86400 ))
+          echo "Newest commit is ${AGE_DAYS} day(s) old."
+          if [ "${AGE_DAYS}" -lt 50 ]; then
+            echo "Under threshold — no keepalive commit needed."
+            exit 0
+          fi
+          echo "Over threshold — pushing an empty keepalive commit."
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "chore: keepalive to keep scheduled workflows enabled"
+          git push origin HEAD:main
