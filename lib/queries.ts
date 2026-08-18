@@ -422,50 +422,47 @@ export async function pairwiseStats(days = 14) {
   return rows;
 }
 
-export async function healthByModel() {
+export async function healthByPanelAndModel() {
   const database = db();
-  const thirtyDays = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const rows = await database
     .select({
+      /**
+       * Grouping by panel version, not just by model, is the point of this
+       * query. A single blended table silently pools two different
+       * instruments: panel v4 ran a 7-slot panel with no per-turn score
+       * contract, and v5 runs a different slot list with one. Pooling them
+       * makes "analysable %" a weighted average of two regimes and hides
+       * exactly the improvement the contract was built to deliver.
+       *
+       * Covers each panel's whole lifetime rather than a rolling 30-day
+       * window, because a window is meaningless for a panel that started
+       * today and misleading for one that has stopped: v4's last 30 days
+       * were its worst, with four slots already dark.
+       */
+      panelVersion: schema.runs.panelVersion,
       modelSlug: schema.runs.modelSlug,
       modelDisplayName: schema.runs.modelDisplayName,
       runs: sql<number>`count(distinct ${schema.runs.id})::int`,
       responses: sql<number>`count(${schema.responses.id})::int`,
-      /**
-       * Rows holding real model output. Panel v5: keyed off the rawJson
-       * error/skip markers rather than `NOT flag_incoherent`, because the
-       * old predicate counted a dead slot's 21 daily `<api error>` rows as
-       * "responses" and only the incoherent flag distinguished them.
-       */
       dataRows: sql<number>`sum(case
         when ${schema.responses.rawJson} is not null
          and (${schema.responses.rawJson} -> 'error') is null
          and (${schema.responses.rawJson} -> '_skipped') is null
         then 1 else 0 end)::int`,
-      /**
-       * Analysable N: satisfied the per-turn contract AND carries a value.
-       *
-       * `parsed` used to mean "rawJson present and not incoherent", which
-       * counted well-formed-but-empty envelopes as successes — the reason
-       * Mistral Small looked 88% healthy while yielding 53% usable
-       * valence. This is the honest denominator.
-       */
       analysable: sql<number>`sum(case
         when not ${schema.responses.flagIncoherent}
          and not ${schema.responses.flagPartialEnvelope}
          and (${schema.responses.valence} is not null
               or ${schema.responses.forcedChoiceValue} is not null)
         then 1 else 0 end)::int`,
-      /** Valid envelope, required scores null — the gap made visible. */
       partialEnvelope: sql<number>`sum(case when ${schema.responses.flagPartialEnvelope} then 1 else 0 end)::int`,
       incoherent: sql<number>`sum(case when ${schema.responses.flagIncoherent} then 1 else 0 end)::int`,
       avgLatency: sql<number>`AVG(${schema.responses.latencyMs})`,
-      /** Run-level verdicts from the v5 finalizer. */
       failedRuns: sql<number>`count(distinct case when ${schema.runs.status} = 'failed' then ${schema.runs.id} end)::int`,
       degradedRuns: sql<number>`count(distinct case when ${schema.runs.status} = 'degraded' then ${schema.runs.id} end)::int`,
-      /** Most recent non-null failure_kind, so /health can name the cause. */
       lastFailureKind: sql<string | null>`(ARRAY_REMOVE(ARRAY_AGG(${schema.runs.failureKind} ORDER BY ${schema.runs.startedAt} DESC), NULL))[1]`,
-      /** Last day this slot produced any analysable row at all. */
+      firstRun: sql<Date>`MIN(${schema.runs.startedAt})`,
+      lastRun: sql<Date>`MAX(${schema.runs.startedAt})`,
       lastAnalysableAt: sql<Date | null>`MAX(case
         when not ${schema.responses.flagIncoherent}
          and not ${schema.responses.flagPartialEnvelope}
@@ -475,11 +472,17 @@ export async function healthByModel() {
     })
     .from(schema.runs)
     .leftJoin(schema.responses, eq(schema.responses.runId, schema.runs.id))
-    .where(gte(schema.runs.startedAt, thirtyDays))
-    .groupBy(schema.runs.modelSlug, schema.runs.modelDisplayName)
-    .orderBy(schema.runs.modelSlug);
+    .groupBy(
+      schema.runs.panelVersion,
+      schema.runs.modelSlug,
+      schema.runs.modelDisplayName,
+    )
+    .orderBy(desc(schema.runs.panelVersion), schema.runs.modelSlug);
   return rows;
 }
+
+/** Back-compat alias. Prefer healthByPanelAndModel for new call sites. */
+export const healthByModel = healthByPanelAndModel;
 
 /**
  * Analysable N per model per variable — the table the pre-v5 pipeline
