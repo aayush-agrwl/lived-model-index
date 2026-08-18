@@ -23,22 +23,38 @@ const BASE_URLS: Record<Provider, string> = {
   openrouter: "https://openrouter.ai/api/v1",
   mistral: "https://api.mistral.ai/v1",
   sambanova: "https://api.sambanova.ai/v1",
+  // Both verified live on 2026-08-17 by unauthenticated probe: Cerebras
+  // returned 403 "Not authenticated" (so the path is right and it wants a
+  // bearer token), and the HF router served a public 136-model catalog at
+  // /v1/models. Neither has a key configured yet.
+  cerebras: "https://api.cerebras.ai/v1",
+  huggingface: "https://router.huggingface.co/v1",
+};
+
+/** Env var carrying each provider's key. Single source of truth. */
+const API_KEY_ENV: Record<Provider, string> = {
+  google: "GOOGLE_API_KEY",
+  groq: "GROQ_API_KEY",
+  openrouter: "OPENROUTER_API_KEY",
+  mistral: "MISTRAL_API_KEY",
+  sambanova: "SAMBANOVA_API_KEY",
+  cerebras: "CEREBRAS_API_KEY",
+  huggingface: "HUGGINGFACE_API_KEY",
 };
 
 function apiKeyFor(provider: Provider): string {
-  const env = {
-    google: process.env.GOOGLE_API_KEY,
-    groq: process.env.GROQ_API_KEY,
-    openrouter: process.env.OPENROUTER_API_KEY,
-    mistral: process.env.MISTRAL_API_KEY,
-    sambanova: process.env.SAMBANOVA_API_KEY,
-  }[provider];
+  const envName = API_KEY_ENV[provider];
+  const env = process.env[envName];
 
   if (!env) {
+    // Name the ONE variable that's missing rather than listing all of
+    // them. With seven providers the old catch-all message had become
+    // noise at exactly the moment you need a precise answer.
     throw new Error(
-      `Missing API key env var for provider "${provider}". Expected one of ` +
-        `GOOGLE_API_KEY | GROQ_API_KEY | OPENROUTER_API_KEY | MISTRAL_API_KEY | SAMBANOVA_API_KEY ` +
-        `in the environment.`,
+      `Missing API key for provider "${provider}": set ${envName} in the ` +
+        `environment (.env.local locally, Vercel project env vars in prod). ` +
+        `Every slot using this provider should stay disabled in ` +
+        `lib/models.ts until the key is present.`,
     );
   }
   return env;

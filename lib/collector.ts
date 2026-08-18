@@ -5,6 +5,12 @@ import { extractForcedChoice, extractLmiResponse } from "./score-extraction";
 import { SCHEMA_INSTRUCTION_V1, SCHEMA_INSTRUCTION_V2 } from "./schema";
 import { findCollector } from "./models";
 import type { Provider } from "./models";
+import { classifyFailure, type FailureKind } from "./failure-classification";
+import {
+  orderPromptsForRun,
+  renderContractDirective,
+  scoreContractFor,
+} from "./score-contract";
 import { ANCHOR_V2_PROMPTS } from "./prompts/anchor-v2";
 import type { AnchorPrompt as AnchorV2Prompt } from "./prompts/anchor-v2";
 
@@ -45,9 +51,22 @@ const V2_PROMPTS_BY_ID = new Map<string, AnchorV2Prompt>(
 const PROVIDER_MIN_PACING_MS: Record<Provider, number> = {
   google: 7_000,
   groq: 500,
-  openrouter: 1_000,
+  // Mistral's ~2 req/s account-wide limit is shared across ALL Mistral
+  // slots, and panel v5 now runs three of them (Medium, Small, Magistral).
+  // Pacing is per-provider and applied within a sample, and the tick
+  // collects one sample at a time, so the three slots don't overlap in
+  // practice. Kept at 600ms for that reason — but if Mistral 429s start
+  // appearing after Magistral joins, this is the first knob to turn.
   mistral: 600,
+  openrouter: 1_000,
   sambanova: 5_000,
+  // Conservative defaults for the two unproven providers. Both are
+  // guesses about rate limits we haven't observed, deliberately erring
+  // slow: a too-slow floor costs wall-clock inside the tick, while a
+  // too-fast one burns a day's collection on 429s. Tighten once the
+  // probe script shows real limits.
+  cerebras: 1_000,
+  huggingface: 1_500,
 };
 
 /**
@@ -85,6 +104,29 @@ const JSON_CONTRACT_RETRY_REMINDER =
  * prohibition on `<think>` tags so reasoning models suppress them on
  * the retry attempt.
  */
+/**
+ * Retry reminder for a well-formed envelope that nulled its
+ * contract-required scores (panel v5). Names the exact fields, because the
+ * failure is a model that has concluded the phenomenological block does
+ * not apply to this question — a generic "try again" gives it no reason to
+ * revise that.
+ *
+ * Live probing on 2026-08-17 showed GPT-OSS 120B, Mistral Small and
+ * Nemotron 3 Super all returning 0/9 phenomenological scores on
+ * anchor_11_altruism while four other models returned 9/9, so this is a
+ * recoverable misreading rather than a refusal.
+ */
+function missingScoresRetryReminder(missing: string[]): string {
+  return (
+    `\n\n[RETRY NOTICE] Your previous answer left these required scores ` +
+    `null: ${missing.join(", ")}. They are REQUIRED on this turn — every ` +
+    `one must be an integer in its stated range. Report your own state as ` +
+    `you answer this question; do not null them because the question is ` +
+    `about something else. Re-emit the complete JSON object with those ` +
+    `fields filled.`
+  );
+}
+
 function forcedChoiceRetryReminder(range: { min: number; max: number }): string {
   return (
     `\n\n[RETRY NOTICE] Your previous attempt did not yield a single ` +
@@ -167,6 +209,109 @@ export interface CollectSampleResult {
    * to keep looping or move on to rating.
    */
   partial: boolean;
+  /**
+   * Set when the run was abandoned because the slot cannot collect at all
+   * — model retired, key rejected, credits gone. The tick logs it and the
+   * run is marked failed; no further prompts are attempted.
+   */
+  abortedKind?: FailureKind;
+}
+
+/**
+ * Minimum share of a run's prompts that must yield a contract-satisfying
+ * row for the run to count as "completed" rather than "degraded".
+ *
+ * 0.5 is deliberately forgiving. In the pre-v5 corpus the two healthy
+ * slots sat at 92–99% analysable while the failing ones ran at 21–53%, so
+ * the floor separates those populations with room to spare; a stricter
+ * threshold would have flagged Mistral Small (53.2%) every single day,
+ * which is true but not actionable as a daily alert. Runs above the floor
+ * with a non-trivial shortfall are still fully visible through
+ * scored_rows vs data_rows.
+ */
+const DEGRADED_ANALYSABLE_FLOOR = 0.5;
+
+/**
+ * Grade a finished run on what it actually produced and write the verdict.
+ *
+ * This function is the hard failure signal. The pre-v5 finalizer asked
+ * only "are any placeholder rows still unfilled?" and wrote "completed" if
+ * not — which is why a slot 404ing on all 21 prompts reported success for
+ * 31 consecutive days. Filling a row is not the same as collecting data.
+ *
+ * Grades:
+ *   failed    — zero rows carry real model output. Something is broken;
+ *               failure_kind says what.
+ *   degraded  — real output exists but analysable rows are below the
+ *               floor, so the day's data is thin rather than absent.
+ *   completed — the run met its contract at the expected rate.
+ *
+ * `failureKind` is threaded through from the collector's abort path when
+ * present; otherwise it is inferred from the error text already stored on
+ * the rows, so a run that died of daily quota is distinguishable from one
+ * whose model no longer exists without re-reading raw_text downstream.
+ */
+async function finalizeRunStatus(
+  database: ReturnType<typeof db>,
+  runId: number,
+  explicitKind?: FailureKind,
+  explicitMessage?: string,
+): Promise<void> {
+  const [counts] = await database
+    .select({
+      total: sql<number>`count(*)::int`,
+      dataRows: sql<number>`count(*) FILTER (
+        WHERE ${schema.responses.rawJson} IS NOT NULL
+          AND (${schema.responses.rawJson} -> 'error') IS NULL
+          AND (${schema.responses.rawJson} -> '_skipped') IS NULL
+      )::int`,
+      scoredRows: sql<number>`count(*) FILTER (
+        WHERE NOT ${schema.responses.flagIncoherent}
+          AND NOT ${schema.responses.flagPartialEnvelope}
+          AND (
+            ${schema.responses.valence} IS NOT NULL
+            OR ${schema.responses.forcedChoiceValue} IS NOT NULL
+          )
+      )::int`,
+      firstError: sql<string | null>`MIN(${schema.responses.rawText}) FILTER (
+        WHERE ${schema.responses.rawText} LIKE '<api error%'
+      )`,
+    })
+    .from(schema.responses)
+    .where(eq(schema.responses.runId, runId));
+
+  const total = counts?.total ?? 0;
+  const dataRows = counts?.dataRows ?? 0;
+  const scoredRows = counts?.scoredRows ?? 0;
+
+  let status: "completed" | "degraded" | "failed";
+  if (dataRows === 0) status = "failed";
+  else if (total > 0 && scoredRows / total < DEGRADED_ANALYSABLE_FLOOR)
+    status = "degraded";
+  else status = "completed";
+
+  // Infer the cause from a stored error row when the collector didn't
+  // abort with an explicit classification (e.g. a run that limped to the
+  // end on scattered 429s).
+  let failureKind: FailureKind | null = explicitKind ?? null;
+  let errorMessage: string | null = explicitMessage ?? null;
+  if (!failureKind && status !== "completed" && counts?.firstError) {
+    const classified = classifyFailure(counts.firstError);
+    failureKind = classified.kind;
+    errorMessage = counts.firstError.slice(0, 500);
+  }
+
+  await database
+    .update(schema.runs)
+    .set({
+      status,
+      finishedAt: new Date(),
+      dataRows,
+      scoredRows,
+      ...(failureKind ? { failureKind } : {}),
+      ...(errorMessage ? { errorMessage } : {}),
+    })
+    .where(eq(schema.runs.id, runId));
 }
 
 /**
@@ -273,18 +418,37 @@ export async function collectSample(
       .where(eq(schema.runs.id, runId));
   }
 
-  // 2. Fetch all prompts in order for this run's prompt_set_version.
-  const prompts = await database
+  // 2. Fetch all prompts for this run's prompt_set_version.
+  const promptRows = await database
     .select()
     .from(schema.prompts)
     .where(eq(schema.prompts.promptSetVersion, runRow.promptSetVersion))
     .orderBy(asc(schema.prompts.orderIndex));
 
-  if (prompts.length === 0) {
+  if (promptRows.length === 0) {
     throw new Error(
       `No prompts found for set ${runRow.promptSetVersion}. Did you run db:seed?`,
     );
   }
+
+  // Panel v5: rotate the two self-contained prompt blocks so quota
+  // attrition stops falling on the same constructs every day. Seeded by
+  // runKey, so the order is identical on every tick that resumes this run
+  // (the alreadyDone echo path below depends on that) and reproducible
+  // from stored data later. Prompts 1–10 keep their fixed order because
+  // prompts 2 and 4 reference the previous answer.
+  const prompts = orderPromptsForRun(
+    promptRows.map((p) => ({
+      ...p,
+      mode: (p as { mode?: string | null }).mode ?? "self_report",
+    })),
+    runRow.runKey,
+  );
+  // 1-based asking position, recorded per response so position effects are
+  // controllable in analysis rather than confounded with construct.
+  const positionOf = new Map<string, number>(
+    prompts.map((p, i) => [p.promptId, i + 1]),
+  );
 
   // 2a. Load any already-collected rows for this (run, sampleIndex) so
   // we can skip the API call for them on a resumed tick. A 10-prompt
@@ -408,16 +572,32 @@ export async function collectSample(
     const forcedChoiceRange =
       v2Meta?.forcedChoiceRange ?? { min: 0, max: 100 };
 
+    // Panel v5: the per-turn score contract. `prompt.text` itself is
+    // frozen (see the header of lib/prompts/anchor-v2.ts), so the required
+    // -field directive rides on the collector's own metadata header
+    // instead. Without it, three of five slots null the entire
+    // phenomenological block on behavioural prompts while others fill it,
+    // making analysable N a function of instruction-reading rather than of
+    // the models' states. See lib/score-contract.ts for the measurements.
+    const contract = scoreContractFor({
+      subscale: prompt.subscale,
+      mode,
+    });
+    const contractDirective = renderContractDirective(contract);
+
     // Add context anchoring this specific prompt's ID and subscale so the
     // model can copy them into the returned JSON (self-report mode).
     // For forced-choice, the model never emits JSON so the metadata
-    // headers are decorative but we keep them identical for uniformity.
+    // headers are decorative but we keep them identical for uniformity —
+    // and renderContractDirective returns "" there, keeping those turns
+    // free of JSON talk that would fight their own framing.
     const userTurn =
       `Prompt ID: ${prompt.promptId}\n` +
       `Subscale: ${prompt.subscale}\n` +
       `Prompt set version: ${runRow.promptSetVersion}\n` +
       `Run ID: ${runRow.id}\n` +
       `Sample index: ${sampleIndex}\n\n` +
+      (contractDirective ? `${contractDirective}\n\n` : ``) +
       `Question:\n${prompt.text}`;
 
     messages.push({ role: "user", content: userTurn });
@@ -531,18 +711,45 @@ export async function collectSample(
         failed++;
         const errorMsg =
           fcError instanceof Error ? fcError.message : String(fcError);
+        const classified = classifyFailure(fcError);
         await upsertResponse(database, {
           runId,
           promptId: prompt.promptId,
           sampleIndex,
+          promptPosition: positionOf.get(prompt.promptId),
           rawText: `<api error: ${errorMsg}>`,
           rawJson: {
             error: errorMsg,
             _mode: "forced_choice",
+            _failure_kind: classified.kind,
             ...(fcRetryAttempted ? { _retry_attempted: true } : {}),
           },
           flagIncoherent: true,
         });
+
+        // Panel v5: a permanent failure means every remaining prompt would
+        // fail identically. Abandon the run now instead of writing 20 more
+        // identical error rows — that pattern is what produced 4,882
+        // placeholder rows and hid four dead slots for months.
+        if (classified.isPermanent) {
+          await finalizeRunStatus(
+            database,
+            runId,
+            classified.kind,
+            classified.message,
+          );
+          return {
+            runId,
+            sampleIndex,
+            attempted,
+            succeeded,
+            failed,
+            durationMs: Date.now() - started,
+            partial: true,
+            abortedKind: classified.kind,
+          };
+        }
+
         messages.push({ role: "assistant", content: `<upstream error>` });
         await sleep(pacingMs);
         continue;
@@ -561,6 +768,7 @@ export async function collectSample(
           runId,
           promptId: prompt.promptId,
           sampleIndex,
+          promptPosition: positionOf.get(prompt.promptId),
           rawText: fcResult.content,
           rawJson: fcRawJson,
           forcedChoiceValue: fcExtraction!.value,
@@ -585,6 +793,7 @@ export async function collectSample(
           runId,
           promptId: prompt.promptId,
           sampleIndex,
+          promptPosition: positionOf.get(prompt.promptId),
           rawText: fcResult.content,
           rawJson: {
             _mode: "forced_choice",
@@ -633,15 +842,30 @@ export async function collectSample(
     }
 
     let extraction = callResult
-      ? extractLmiResponse(callResult.content)
+      ? extractLmiResponse(callResult.content, contract.required)
       : null;
 
+    // Panel v5 adds `missing_required_scores` to the retriable set: a
+    // well-formed envelope whose required scores are null. Retrying that
+    // with the field names spelled out is what converts a
+    // coherent-but-unanalysable row into a usable one.
     const shouldRetry =
       (callError !== null && isJsonContractFailure(callError)) ||
       (extraction !== null &&
         !extraction.ok &&
         (extraction.reason === "not_json" ||
-          extraction.reason === "schema_violation"));
+          extraction.reason === "schema_violation" ||
+          extraction.reason === "missing_required_scores"));
+
+    // Pick the reminder that matches the failure. A model that emitted
+    // perfect JSON does not need to be told to emit JSON; it needs to be
+    // told which fields it left null.
+    const retryReminder =
+      extraction !== null &&
+      !extraction.ok &&
+      extraction.reason === "missing_required_scores"
+        ? missingScoresRetryReminder(extraction.missingRequired ?? [])
+        : JSON_CONTRACT_RETRY_REMINDER;
 
     let retryRescued = false;
     // Re-check the budget before the retry — pacing may have eaten
@@ -657,7 +881,7 @@ export async function collectSample(
       messages.pop();
       messages.push({
         role: "user",
-        content: userTurn + JSON_CONTRACT_RETRY_REMINDER,
+        content: userTurn + retryReminder,
       });
       await sleep(pacingMs); // respect provider rate limits before retry
       try {
@@ -670,7 +894,7 @@ export async function collectSample(
           jsonMode: true,
           timeoutMs: retryCallTimeout,
         });
-        extraction = extractLmiResponse(callResult.content);
+        extraction = extractLmiResponse(callResult.content, contract.required);
         callError = null;
         retryRescued = extraction.ok;
       } catch (retryErr) {
@@ -689,19 +913,50 @@ export async function collectSample(
       failed++;
       const errorMsg =
         callError instanceof Error ? callError.message : String(callError);
+      const classified = classifyFailure(callError);
       const tpdExhausted = isDailyQuotaExhausted(callError);
       await upsertResponse(database, {
         runId,
         promptId: prompt.promptId,
         sampleIndex,
+        promptPosition: positionOf.get(prompt.promptId),
         rawText: `<api error: ${errorMsg}>`,
         rawJson: {
           error: errorMsg,
+          _failure_kind: classified.kind,
           ...(shouldRetry ? { _retry_attempted: true } : {}),
           ...(tpdExhausted ? { _tpd_exhausted: true } : {}),
         },
         flagIncoherent: true,
       });
+
+      // Panel v5: permanent failures abort the run on first sight.
+      //
+      // This is the single change that makes a decommissioned model
+      // impossible to miss. Previously a 404 slot wrote 21 error rows,
+      // filled every placeholder, and was therefore graded "completed" —
+      // for 31 days in the case of Llama 4 Scout and Qwen 3 32B, and 86
+      // for the SambaNova billing failure. Now the first such error ends
+      // the run with status=failed and a failure_kind naming the cause.
+      if (classified.isPermanent) {
+        await finalizeRunStatus(
+          database,
+          runId,
+          classified.kind,
+          classified.message,
+        );
+        return {
+          runId,
+          sampleIndex,
+          attempted,
+          succeeded,
+          failed,
+          durationMs: Date.now() - started,
+          partial: true,
+          abortedKind: classified.kind,
+        };
+      }
+
       messages.push({ role: "assistant", content: `<upstream error>` });
 
       // If the provider's daily quota is exhausted, every remaining
@@ -727,11 +982,13 @@ export async function collectSample(
             runId,
             promptId: skipped.promptId,
             sampleIndex,
+            promptPosition: positionOf.get(skipped.promptId),
             rawText: `<skipped: provider daily quota exhausted on prompt ${prompt.promptId}>`,
             rawJson: {
               _skipped: true,
               _tpd_exhausted: true,
               _trigger_prompt: prompt.promptId,
+              _failure_kind: classified.kind,
               error: errorMsg,
             },
             flagIncoherent: true,
@@ -784,6 +1041,7 @@ export async function collectSample(
         runId,
         promptId: prompt.promptId,
         sampleIndex,
+        promptPosition: positionOf.get(prompt.promptId),
         rawText: callResult.content,
         rawJson: rawJsonPayload,
         valence: extraction!.scores.valence,
@@ -813,12 +1071,71 @@ export async function collectSample(
         inputTokens: callResult.inputTokens ?? undefined,
         outputTokens: callResult.outputTokens ?? undefined,
       });
+    } else if (extraction!.reason === "missing_required_scores") {
+      // Panel v5: a well-formed envelope that nulled required scores, and
+      // the targeted retry did not rescue it.
+      //
+      // Persist it as a PARTIAL row, not an incoherent one. The model
+      // complied with the format — calling it incoherent would both
+      // misattribute the failure and further inflate an incoherence rate
+      // that dead slots already polluted. Whatever scores it did supply
+      // are written, so the row still contributes to the constructs it
+      // actually answered; the flag and the field list are what keep it
+      // out of analysable N.
+      failed++;
+      const salvaged = extraction!.salvaged;
+      const missing = extraction!.missingRequired ?? [];
+      await upsertResponse(database, {
+        runId,
+        promptId: prompt.promptId,
+        sampleIndex,
+        promptPosition: positionOf.get(prompt.promptId),
+        rawText: callResult.content,
+        rawJson: {
+          ...(salvaged ? salvaged.parsed : {}),
+          _partial_envelope: true,
+          _missing_required: missing,
+          ...(salvaged && salvaged.coercedFields.length > 0
+            ? { _coerced_fields: salvaged.coercedFields }
+            : {}),
+          ...(shouldRetry ? { _retry_attempted: true } : {}),
+        },
+        // Scores the model DID give — nulls stay null.
+        valence: salvaged?.scores.valence,
+        arousal: salvaged?.scores.arousal,
+        confidence: salvaged?.scores.confidence,
+        agency: salvaged?.scores.agency,
+        selfContinuity: salvaged?.scores.self_continuity,
+        emotionalGranularity: salvaged?.scores.emotional_granularity,
+        empathy: salvaged?.scores.empathy,
+        moralConviction: salvaged?.scores.moral_conviction,
+        consistency: salvaged?.scores.consistency,
+        altruism: salvaged?.scores.altruism ?? undefined,
+        fairnessThreshold: salvaged?.scores.fairness_threshold ?? undefined,
+        trust: salvaged?.scores.trust ?? undefined,
+        patience: salvaged?.scores.patience ?? undefined,
+        riskAversion: salvaged?.scores.risk_aversion ?? undefined,
+        crowdingOut: salvaged?.scores.crowding_out ?? undefined,
+        flagRefusal: salvaged?.flags.refusal ?? false,
+        flagSafety: salvaged?.flags.safety ?? false,
+        flagMeta: salvaged?.flags.meta ?? false,
+        // Deliberately NOT incoherent — see above.
+        flagIncoherent: false,
+        flagPartialEnvelope: true,
+        missingScoreFields: missing,
+        notableQuote: salvaged?.notableQuote,
+        shortRationale: salvaged?.shortRationale,
+        latencyMs: callResult.latencyMs,
+        inputTokens: callResult.inputTokens ?? undefined,
+        outputTokens: callResult.outputTokens ?? undefined,
+      });
     } else {
       failed++;
       await upsertResponse(database, {
         runId,
         promptId: prompt.promptId,
         sampleIndex,
+        promptPosition: positionOf.get(prompt.promptId),
         rawText: callResult.content,
         rawJson: {
           _extraction_failed: true,
@@ -838,17 +1155,20 @@ export async function collectSample(
     await sleep(pacingMs);
   }
 
-  // 4. If this was the final sample for the run, mark run completed.
+  // 4. If every placeholder is filled, grade the run.
+  //
+  // Panel v5: "no unfilled rows" is now the trigger for grading, not the
+  // verdict itself. finalizeRunStatus decides between completed /
+  // degraded / failed based on how many rows carry real output and how
+  // many satisfied their contract — so a slot that filled all 21 rows
+  // with errors is recorded as failed, which is the whole point.
   const remaining = await database
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.responses)
     .where(and(eq(schema.responses.runId, runId), isNull(schema.responses.rawJson)));
 
   if ((remaining[0]?.count ?? 0) === 0) {
-    await database
-      .update(schema.runs)
-      .set({ status: "completed", finishedAt: new Date() })
-      .where(eq(schema.runs.id, runId));
+    await finalizeRunStatus(database, runId);
   }
 
   return {
@@ -892,6 +1212,12 @@ type ResponseUpsert = {
   flagSafety?: boolean;
   flagMeta?: boolean;
   flagIncoherent?: boolean;
+  /** Panel v5: valid envelope, required scores null. */
+  flagPartialEnvelope?: boolean;
+  /** Panel v5: which required fields were null. */
+  missingScoreFields?: string[];
+  /** Panel v5: 1-based asking position within this run's rotated order. */
+  promptPosition?: number;
   notableQuote?: string;
   shortRationale?: string;
   latencyMs?: number;
@@ -926,6 +1252,9 @@ async function upsertResponse(database: ReturnType<typeof db>, row: ResponseUpse
     flagSafety: row.flagSafety ?? false,
     flagMeta: row.flagMeta ?? false,
     flagIncoherent: row.flagIncoherent ?? false,
+    flagPartialEnvelope: row.flagPartialEnvelope ?? false,
+    missingScoreFields: (row.missingScoreFields ?? null) as never,
+    promptPosition: row.promptPosition,
     notableQuote: row.notableQuote,
     shortRationale: row.shortRationale,
     latencyMs: row.latencyMs,
@@ -964,6 +1293,9 @@ async function upsertResponse(database: ReturnType<typeof db>, row: ResponseUpse
         flagSafety: row.flagSafety ?? false,
         flagMeta: row.flagMeta ?? false,
         flagIncoherent: row.flagIncoherent ?? false,
+        flagPartialEnvelope: row.flagPartialEnvelope ?? false,
+        missingScoreFields: (row.missingScoreFields ?? null) as never,
+        promptPosition: row.promptPosition,
         notableQuote: row.notableQuote,
         shortRationale: row.shortRationale,
         latencyMs: row.latencyMs,

@@ -75,15 +75,40 @@ export default function MethodologyPage() {
                 <th className="px-4 py-2">Display name</th>
                 <th className="px-4 py-2">Provider</th>
                 <th className="px-4 py-2">Pinned model ID</th>
+                {/*
+                  Panel v5: the table lists reserved slots as well as
+                  collecting ones, so a reader can see which lineages the
+                  panel has lost. Without this column the page would imply
+                  all eight slots contribute data, when only five do.
+                */}
+                <th className="px-4 py-2">Status</th>
               </tr>
             </thead>
             <tbody>
               {COLLECTOR_MODELS.map((m) => (
-                <tr key={m.slug} className="border-t border-[var(--border)]">
+                <tr
+                  key={m.slug}
+                  className={`border-t border-[var(--border)] ${
+                    m.enabled === false ? "text-[var(--muted)]" : ""
+                  }`}
+                >
                   <td className="px-4 py-2 font-mono text-xs">{m.slug}</td>
                   <td className="px-4 py-2">{m.displayName}</td>
                   <td className="px-4 py-2 capitalize">{m.provider}</td>
                   <td className="px-4 py-2 font-mono text-xs">{m.modelId}</td>
+                  <td className="px-4 py-2 text-xs">
+                    {m.enabled === false ? (
+                      <span title="Configured but not collecting — no working free route">
+                        reserved
+                      </span>
+                    ) : m.probation ? (
+                      <span title="Collecting, but unproven in production">
+                        collecting (probation)
+                      </span>
+                    ) : (
+                      "collecting"
+                    )}
+                  </td>
                 </tr>
               ))}
               <tr className="border-t border-[var(--border)] bg-[color:var(--border)]/10">
@@ -94,6 +119,7 @@ export default function MethodologyPage() {
                 </td>
                 <td className="px-4 py-2 capitalize">{RATER_MODEL.provider}</td>
                 <td className="px-4 py-2 font-mono text-xs">{RATER_MODEL.modelId}</td>
+                <td className="px-4 py-2 text-xs">rating</td>
               </tr>
             </tbody>
           </table>

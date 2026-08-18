@@ -431,14 +431,111 @@ export async function healthByModel() {
       modelDisplayName: schema.runs.modelDisplayName,
       runs: sql<number>`count(distinct ${schema.runs.id})::int`,
       responses: sql<number>`count(${schema.responses.id})::int`,
-      parsed: sql<number>`sum(case when ${schema.responses.rawJson} is not null and not ${schema.responses.flagIncoherent} then 1 else 0 end)::int`,
+      /**
+       * Rows holding real model output. Panel v5: keyed off the rawJson
+       * error/skip markers rather than `NOT flag_incoherent`, because the
+       * old predicate counted a dead slot's 21 daily `<api error>` rows as
+       * "responses" and only the incoherent flag distinguished them.
+       */
+      dataRows: sql<number>`sum(case
+        when ${schema.responses.rawJson} is not null
+         and (${schema.responses.rawJson} -> 'error') is null
+         and (${schema.responses.rawJson} -> '_skipped') is null
+        then 1 else 0 end)::int`,
+      /**
+       * Analysable N: satisfied the per-turn contract AND carries a value.
+       *
+       * `parsed` used to mean "rawJson present and not incoherent", which
+       * counted well-formed-but-empty envelopes as successes — the reason
+       * Mistral Small looked 88% healthy while yielding 53% usable
+       * valence. This is the honest denominator.
+       */
+      analysable: sql<number>`sum(case
+        when not ${schema.responses.flagIncoherent}
+         and not ${schema.responses.flagPartialEnvelope}
+         and (${schema.responses.valence} is not null
+              or ${schema.responses.forcedChoiceValue} is not null)
+        then 1 else 0 end)::int`,
+      /** Valid envelope, required scores null — the gap made visible. */
+      partialEnvelope: sql<number>`sum(case when ${schema.responses.flagPartialEnvelope} then 1 else 0 end)::int`,
       incoherent: sql<number>`sum(case when ${schema.responses.flagIncoherent} then 1 else 0 end)::int`,
       avgLatency: sql<number>`AVG(${schema.responses.latencyMs})`,
+      /** Run-level verdicts from the v5 finalizer. */
+      failedRuns: sql<number>`count(distinct case when ${schema.runs.status} = 'failed' then ${schema.runs.id} end)::int`,
+      degradedRuns: sql<number>`count(distinct case when ${schema.runs.status} = 'degraded' then ${schema.runs.id} end)::int`,
+      /** Most recent non-null failure_kind, so /health can name the cause. */
+      lastFailureKind: sql<string | null>`(ARRAY_REMOVE(ARRAY_AGG(${schema.runs.failureKind} ORDER BY ${schema.runs.startedAt} DESC), NULL))[1]`,
+      /** Last day this slot produced any analysable row at all. */
+      lastAnalysableAt: sql<Date | null>`MAX(case
+        when not ${schema.responses.flagIncoherent}
+         and not ${schema.responses.flagPartialEnvelope}
+         and (${schema.responses.valence} is not null
+              or ${schema.responses.forcedChoiceValue} is not null)
+        then ${schema.runs.startedAt} end)`,
     })
     .from(schema.runs)
     .leftJoin(schema.responses, eq(schema.responses.runId, schema.runs.id))
     .where(gte(schema.runs.startedAt, thirtyDays))
     .groupBy(schema.runs.modelSlug, schema.runs.modelDisplayName)
     .orderBy(schema.runs.modelSlug);
+  return rows;
+}
+
+/**
+ * Analysable N per model per variable — the table the pre-v5 pipeline
+ * could not produce.
+ *
+ * Counts, for each model and each score field, how many rows carry a
+ * usable value, alongside how many turns were supposed to supply one.
+ * The denominator is what makes this readable: 971/1824 valence on
+ * Mistral Small tells a very different story from a bare "971".
+ *
+ * Deliberately does NOT filter out partial envelopes at the field level —
+ * a row that gave 7 of 9 required fields contributes those 7. What it
+ * excludes is incoherent rows, which have nothing to contribute.
+ */
+export async function analysableByModelAndVariable(days: number | null = null) {
+  const database = db();
+  const since = days
+    ? new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    : new Date(0);
+  const fields = [
+    "valence",
+    "arousal",
+    "confidence",
+    "agency",
+    "self_continuity",
+    "emotional_granularity",
+    "empathy",
+    "moral_conviction",
+    "consistency",
+    "altruism",
+    "fairness_threshold",
+    "trust",
+    "patience",
+    "risk_aversion",
+    "crowding_out",
+    "forced_choice_value",
+  ] as const;
+
+  // One pass, one column pair per field. Wide rather than tall so the
+  // caller can render it as a matrix without pivoting.
+  const selections = fields.flatMap((f) => [
+    sql`sum(case when ${sql.raw(`resp."${f}"`)} is not null and not resp.flag_incoherent then 1 else 0 end)::int as ${sql.raw(`"${f}_n"`)}`,
+    sql`sum(case when ${sql.raw(`resp."${f}"`)} is not null then 1 else 0 end)::int as ${sql.raw(`"${f}_any"`)}`,
+  ]);
+
+  const rows = await database.execute(sql`
+    select r.model_slug, r.model_display_name,
+           count(*)::int as turns,
+           sum(case when resp.flag_incoherent then 1 else 0 end)::int as incoherent,
+           sum(case when resp.flag_partial_envelope then 1 else 0 end)::int as partial_envelope,
+           ${sql.join(selections, sql`, `)}
+    from runs r
+    join responses resp on resp.run_id = r.id
+    where r.started_at >= ${since}
+    group by r.model_slug, r.model_display_name
+    order by r.model_slug
+  `);
   return rows;
 }

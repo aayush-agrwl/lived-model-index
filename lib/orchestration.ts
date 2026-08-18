@@ -1,6 +1,6 @@
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
-import { COLLECTOR_MODELS, MODEL_PANEL_VERSION } from "./models";
+import { activeCollectors, MODEL_PANEL_VERSION } from "./models";
 import { ANCHOR_V2_VERSION, ANCHOR_V2_PROMPTS } from "./prompts/anchor-v2";
 
 /**
@@ -52,7 +52,12 @@ export async function bootstrapDailyRuns(date: string = todayUtc()): Promise<Boo
   let runsExisting = 0;
   let placeholderRowsCreated = 0;
 
-  for (const model of COLLECTOR_MODELS) {
+  // Panel v5: only ENABLED slots get runs. A disabled slot (retired model,
+  // provider needing payment) creates no run and no placeholder rows, so
+  // it cannot spend API calls or write `<api error>` rows. Every one of
+  // the 4,882 error rows in the pre-v5 corpus came from a dead slot that
+  // the config had no way to switch off.
+  for (const model of activeCollectors()) {
     const runKey = runKeyFor(date, model.slug, CURRENT_PROMPT_SET);
 
     // Try to find an existing run for today.

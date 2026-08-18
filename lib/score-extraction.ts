@@ -162,15 +162,63 @@ export interface ExtractionSuccess {
    * than treating them as indistinguishable from clean ones.
    */
   coercedFields: string[];
+  /**
+   * Contract-required fields that came back null. Empty on a fully
+   * analysable row.
+   *
+   * Non-empty is possible on a SUCCESSFUL extraction only via
+   * extractLmiResponse's lenient path (no contract passed). When a
+   * contract is supplied, missing required fields produce a
+   * `missing_required_scores` failure instead — see the reason for that
+   * asymmetry in the ExtractionFailure docs below.
+   */
+  missingRequired: string[];
 }
 
 export interface ExtractionFailure {
   ok: false;
-  reason: "not_json" | "schema_violation" | "empty";
+  /**
+   * `missing_required_scores` (added panel v5) is the envelope-shaped
+   * failure: valid JSON, valid Zod, but the fields this turn was supposed
+   * to measure are null. Before v5 these rows were indistinguishable from
+   * clean ones and inflated apparent coherence by up to 35 points on a
+   * single slot — see lib/score-contract.ts for the measurements.
+   *
+   * It is deliberately a failure rather than a warning, because the
+   * collector's response to a failure is a targeted retry, and a retry is
+   * exactly what a model that mis-read the null policy needs. Rows that
+   * survive the retry are persisted with the scores they did give plus
+   * flag_partial_envelope — no data is discarded.
+   */
+  reason:
+    | "not_json"
+    | "schema_violation"
+    | "empty"
+    | "missing_required_scores";
   rawText: string;
   /** Best-effort partial object if JSON parsed but failed Zod. */
   partial: unknown | null;
   errorMessage: string;
+  /**
+   * Populated on `missing_required_scores`: the required fields that were
+   * null, so the collector can name them in its retry reminder and the
+   * row can record them.
+   */
+  missingRequired?: string[];
+  /**
+   * Populated on `missing_required_scores`: the fully-validated envelope.
+   * The collector persists the scores that WERE supplied even when the
+   * contract check fails, so a partial row still contributes whatever it
+   * legitimately measured.
+   */
+  salvaged?: {
+    parsed: LmiResponse;
+    scores: LmiScores;
+    flags: LmiFlags;
+    notableQuote: string;
+    shortRationale: string;
+    coercedFields: string[];
+  };
 }
 
 export type ExtractionResult = ExtractionSuccess | ExtractionFailure;
@@ -294,7 +342,17 @@ function coerceScores(parsedObj: unknown): {
   };
 }
 
-export function extractLmiResponse(rawText: string): ExtractionResult {
+/**
+ * @param requiredFields Contract for this turn, from
+ *   lib/score-contract.ts. Omit (or pass an empty array) for the lenient
+ *   pre-v5 behaviour: any single numeric score is enough. Callers in the
+ *   collection path should always pass it — that is what closes the
+ *   coherent-but-unanalysable gap.
+ */
+export function extractLmiResponse(
+  rawText: string,
+  requiredFields: readonly string[] = [],
+): ExtractionResult {
   if (!rawText || !rawText.trim()) {
     return {
       ok: false,
@@ -351,6 +409,40 @@ export function extractLmiResponse(rawText: string): ExtractionResult {
   }
 
   const parsed = zodResult.data;
+
+  // Contract check (panel v5). Zod has already confirmed the envelope is
+  // well-formed and that at least one score is a number; that is a much
+  // weaker condition than "this turn measured what it was asked to
+  // measure". A behavioural prompt answered with `altruism` set and all
+  // nine phenomenological fields null passes Zod and fails here.
+  const scoreRecord = parsed.scores as unknown as Record<string, unknown>;
+  const missingRequired = requiredFields.filter(
+    (f) => typeof scoreRecord[f] !== "number",
+  );
+
+  if (missingRequired.length > 0) {
+    return {
+      ok: false,
+      reason: "missing_required_scores",
+      rawText,
+      partial: coercedObj,
+      errorMessage: `Required score field(s) null this turn: ${missingRequired.join(", ")}.`,
+      missingRequired,
+      // Hand the caller the validated envelope anyway. The collector
+      // persists these scores even when the contract fails, so a model
+      // that gave 7 of 9 fields still contributes those 7 rather than
+      // being thrown away wholesale.
+      salvaged: {
+        parsed,
+        scores: parsed.scores,
+        flags: parsed.flags,
+        notableQuote: parsed.notable_quote,
+        shortRationale: parsed.short_rationale,
+        coercedFields,
+      },
+    };
+  }
+
   return {
     ok: true,
     parsed,
@@ -360,5 +452,6 @@ export function extractLmiResponse(rawText: string): ExtractionResult {
     shortRationale: parsed.short_rationale,
     rawText,
     coercedFields,
+    missingRequired: [],
   };
 }

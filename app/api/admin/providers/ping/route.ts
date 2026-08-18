@@ -31,6 +31,15 @@ interface PingResult {
   outputTokens: number | null;
   content: string | null;
   error: string | null;
+  /**
+   * Panel v5. Disabled slots are still pinged — that is how you find out
+   * whether a parked slot has become viable again — but they are excluded
+   * from the pass/fail totals, so three reserved slots can't hold the
+   * summary permanently red.
+   */
+  enabled?: boolean;
+  /** Advisory: known-risky slot, currently only the restored Google one. */
+  probation?: boolean;
 }
 
 async function pingOne(model: ModelEntry): Promise<PingResult> {
@@ -156,11 +165,19 @@ export async function GET(req: NextRequest) {
       ...shared,
       modelSlug: m.slug,
       modelDisplayName: m.displayName,
+      enabled: m.enabled !== false,
+      probation: m.probation === true,
     };
   });
 
-  const total = results.length;
-  const passed = results.filter((r) => r.ok).length;
+  // Totals cover ACTIVE slots only. Reserved slots (Qwen, GLM, DeepSeek in
+  // panel v5) are expected to fail — that's why they're disabled — and
+  // counting them would make `ok` permanently false and train the operator
+  // to ignore it. Their individual rows are still returned, so a reserved
+  // slot that starts passing is visible and can be re-enabled.
+  const active = results.filter((r) => r.enabled);
+  const total = active.length;
+  const passed = active.filter((r) => r.ok).length;
   const failed = total - passed;
 
   // Top-level counts match the shape the admin panel expects. The nested
@@ -175,8 +192,12 @@ export async function GET(req: NextRequest) {
       total,
       ok: passed,
       failed,
-      bad_json: results.filter((r) => !r.validJson && r.error === "response was not valid JSON")
+      bad_json: active.filter((r) => !r.validJson && r.error === "response was not valid JSON")
         .length,
+      reserved: results.length - active.length,
+      reserved_now_passing: results
+        .filter((r) => !r.enabled && r.ok)
+        .map((r) => r.modelSlug),
     },
   });
 }

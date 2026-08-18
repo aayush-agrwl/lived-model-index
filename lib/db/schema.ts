@@ -90,13 +90,56 @@ export const runs = pgTable(
     providerModelId: text("provider_model_id"),
     /** JSON: { temperature, top_p, max_tokens, sample_count } */
     settings: jsonb("settings").notNull(),
+    /**
+     * pending | running | completed | degraded | failed
+     *
+     * Before panel v5 this only ever became "completed", because the
+     * finalizer's sole test was "are there any unfilled placeholder rows
+     * left?" — and a slot returning 404 on all 21 prompts fills all 21
+     * rows with `<api error>` and therefore "completes". Four slots sat
+     * dark for 31–86 days looking healthy.
+     *
+     * From v5 the finalizer grades the run on what it actually produced
+     * (see finalizeRunStatus in lib/collector.ts):
+     *   completed — collected and analysable at the expected rate
+     *   degraded  — produced some usable data, below the floor
+     *   failed    — produced no usable data at all
+     */
     status: text("status").notNull().default("pending"),
     errorMessage: text("error_message"),
+    /**
+     * Machine-readable cause when status is failed/degraded — one of the
+     * FailureKind values in lib/failure-classification.ts
+     * (model_unavailable, auth, billing, quota_daily, rate_limit,
+     * timeout, json_contract, server, unknown). Null on a clean run.
+     *
+     * This is the column to alert on: `model_unavailable` means a vendor
+     * retired a model out from under the panel and a human must pick a
+     * replacement.
+     */
+    failureKind: text("failure_kind"),
+    /**
+     * Rows this run produced that hold real model output — i.e. excluding
+     * `<api error>` and `<skipped>` placeholders. Denormalised at
+     * finalize time so health checks and the audit trail don't have to
+     * re-derive it by string-matching raw_text, which is both slow and
+     * fragile (246 rows in the corpus legitimately start with "<" because
+     * they are `<think>` reasoning preambles).
+     */
+    dataRows: integer("data_rows"),
+    /**
+     * Rows that satisfied their full per-turn score contract — the
+     * analysable N. Always ≤ dataRows. The gap between the two is the
+     * coherent-but-unanalysable population that panel v5 exists to
+     * surface; on Mistral Small it was 35% of turns.
+     */
+    scoredRows: integer("scored_rows"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     idxRunsStartedAt: index("idx_runs_started_at").on(table.startedAt),
     idxRunsModelSlug: index("idx_runs_model_slug").on(table.modelSlug),
+    idxRunsStatus: index("idx_runs_status").on(table.status),
   }),
 );
 
@@ -154,6 +197,44 @@ export const responses = pgTable(
     flagSafety: boolean("flag_safety").default(false).notNull(),
     flagMeta: boolean("flag_meta").default(false).notNull(),
     flagIncoherent: boolean("flag_incoherent").default(false).notNull(),
+    /**
+     * Well-formed envelope whose contract-required scores were null
+     * (panel v5). This is the flag that separates "the model answered
+     * something we can analyse" from "the model answered validly and told
+     * us nothing" — the distinction that made coherence overstate
+     * analysable N by up to 35 points per slot in the pre-v5 corpus.
+     *
+     * Such a row is NOT flag_incoherent: the model complied with the
+     * format, so calling it incoherent would misattribute the failure and
+     * further pollute the incoherence rate (already inflated by dead-slot
+     * error rows). Any aggregate that needs analysable N should require
+     * `NOT flag_partial_envelope` alongside a non-null score.
+     */
+    flagPartialEnvelope: boolean("flag_partial_envelope")
+      .default(false)
+      .notNull(),
+    /**
+     * Which contract-required fields came back null, as a JSON array of
+     * field names. Null when nothing was missing. Kept per-row rather
+     * than only counted so a later analysis can ask *which* constructs a
+     * given model systematically declines to report.
+     */
+    missingScoreFields: jsonb("missing_score_fields"),
+    /**
+     * 1-based position of this prompt within its run's actual asking
+     * order. Panel v5 rotates the two self-contained prompt blocks per
+     * run (see orderPromptsForRun), so position is no longer a fixed
+     * function of prompt_id — recording it is what makes the rotation
+     * analysable rather than merely fairer.
+     *
+     * Why it matters: in the pre-v5 corpus, quota attrition always struck
+     * the same late prompts, so Qwen 3 32B's analysable N fell
+     * monotonically 50 → 32 → 23 → 16 → 11 → 8 across the six Path A
+     * constructs. Missingness was perfectly confounded with construct.
+     * With rotation plus this column, position becomes a covariate an
+     * analyst can control for instead of a confound baked into the data.
+     */
+    promptPosition: integer("prompt_position"),
 
     notableQuote: text("notable_quote"),
     shortRationale: text("short_rationale"),

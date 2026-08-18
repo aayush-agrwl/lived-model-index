@@ -133,16 +133,27 @@ export default async function HealthPage() {
                   <tr>
                     <th className="px-4 py-2">Model</th>
                     <th className="px-4 py-2">Runs</th>
-                    <th className="px-4 py-2">Responses</th>
-                    <th className="px-4 py-2">Parsed OK</th>
+                    <th className="px-4 py-2">Rows</th>
+                    {/*
+                      Panel v5 splits the old "Parsed OK" column in three.
+                      It used to mean "rawJson present and not incoherent",
+                      which counted both a dead slot's error rows (via a
+                      subtle interaction with the flag) and well-formed
+                      envelopes containing no scores. Mistral Small read as
+                      88% healthy while yielding 53% usable valence.
+                    */}
+                    <th className="px-4 py-2">Data</th>
+                    <th className="px-4 py-2">Analysable</th>
+                    <th className="px-4 py-2">Partial</th>
                     <th className="px-4 py-2">Incoherent</th>
                     <th className="px-4 py-2">Avg latency</th>
+                    <th className="px-4 py-2">Verdict</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-3 text-[var(--muted)]">
+                      <td colSpan={9} className="px-4 py-3 text-[var(--muted)]">
                         No data yet.
                       </td>
                     </tr>
@@ -153,9 +164,21 @@ export default async function HealthPage() {
                         <td className="px-4 py-2">{r.runs}</td>
                         <td className="px-4 py-2">{r.responses}</td>
                         <td className="px-4 py-2">
-                          {r.parsed}{" "}
+                          {r.dataRows}{" "}
                           <span className="text-xs text-[var(--muted)]">
-                            ({pct(r.parsed, r.responses)})
+                            ({pct(r.dataRows, r.responses)})
+                          </span>
+                        </td>
+                        <td className="px-4 py-2">
+                          {r.analysable}{" "}
+                          <span className="text-xs text-[var(--muted)]">
+                            ({pct(r.analysable, r.responses)})
+                          </span>
+                        </td>
+                        <td className="px-4 py-2">
+                          {r.partialEnvelope}{" "}
+                          <span className="text-xs text-[var(--muted)]">
+                            ({pct(r.partialEnvelope, r.responses)})
                           </span>
                         </td>
                         <td className="px-4 py-2">
@@ -168,6 +191,24 @@ export default async function HealthPage() {
                           {r.avgLatency != null
                             ? `${Math.round(Number(r.avgLatency))} ms`
                             : "—"}
+                        </td>
+                        <td className="px-4 py-2">
+                          {r.failedRuns > 0 ? (
+                            <span className="inline-block rounded bg-red-500/12 px-2 py-0.5 text-xs font-medium text-red-700">
+                              {r.failedRuns} failed
+                            </span>
+                          ) : r.degradedRuns > 0 ? (
+                            <span className="inline-block rounded bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-800">
+                              {r.degradedRuns} degraded
+                            </span>
+                          ) : (
+                            <span className="text-xs text-[var(--muted)]">ok</span>
+                          )}
+                          {r.lastFailureKind ? (
+                            <div className="mt-1 font-mono text-[10px] text-[var(--muted)]">
+                              {r.lastFailureKind}
+                            </div>
+                          ) : null}
                         </td>
                       </tr>
                     ))
@@ -200,7 +241,12 @@ function StatusPill({ status }: { status: string | null | undefined }) {
         ? "bg-amber-500/15 text-amber-800"
         : s === "failed"
           ? "bg-red-500/12 text-red-700"
-          : "bg-[color:var(--border)] text-[var(--muted)]";
+          : // Panel v5: a run that produced some usable data but fell
+            // below the analysable floor. Amber, not red — the slot is
+            // alive but thin, which is a different action than "dead".
+            s === "degraded"
+            ? "bg-orange-500/15 text-orange-800"
+            : "bg-[color:var(--border)] text-[var(--muted)]";
   return (
     <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${cls}`}>
       {s}
