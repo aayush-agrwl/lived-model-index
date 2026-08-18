@@ -70,9 +70,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <a href="/methodology" className="hover:text-[var(--foreground)]">
                 Methodology
               </a>
-              <a href="/support" className="hover:text-[var(--foreground)]">
-                Support the Index
-              </a>
             </nav>
           </header>
           <main>{children}</main>
