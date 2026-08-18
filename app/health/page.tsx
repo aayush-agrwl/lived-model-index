@@ -3,7 +3,7 @@ import {
   latestRunPerModel,
   totalRunDays,
 } from "@/lib/queries";
-import { MODEL_PANEL_VERSION } from "@/lib/models";
+import { activeCollectors, MODEL_PANEL_VERSION } from "@/lib/models";
 import { todayStatus } from "@/lib/orchestration";
 
 // Operational page: cache for 30 seconds. The collect/rate progress
@@ -51,6 +51,12 @@ export default async function HealthPage() {
   // The query already orders by panel descending, so insertion order into
   // the Map preserves that — no second sort needed, and no assumption that
   // version strings sort the way we want beyond the desc the DB applied.
+  // Slugs the CURRENT panel still collects. Distinct from "did this
+  // model's last run happen under the current panel" — on a changeover day
+  // a live slot has only old runs, and conflating the two would label an
+  // active model retired.
+  const activeSlugs = new Set(activeCollectors().map((m) => m.slug));
+
   const panelMap = new Map<string, typeof rows>();
   for (const row of rows) {
     const list = panelMap.get(row.panelVersion);
@@ -92,7 +98,15 @@ export default async function HealthPage() {
           <section>
             <header className="flex items-baseline justify-between border-b border-[var(--rule)] pb-2">
               <h2 className="font-serif text-2xl tracking-tight">Today</h2>
-              <span className="label-caps">UTC</span>
+              {/*
+                Name the panel these counts describe. todayStatus is scoped
+                to the current panel, so on a changeover day the figures
+                deliberately ignore the outgoing panel's finished runs —
+                without the label that looks like data going missing.
+              */}
+              <span className="label-caps">
+                {today?.panelVersion ?? MODEL_PANEL_VERSION} · UTC
+              </span>
             </header>
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Stat label="Date" value={today?.date ?? "—"} />
@@ -106,6 +120,13 @@ export default async function HealthPage() {
                 value={`${today?.rateDone ?? 0} / ${today?.rateTotal ?? 0}`}
               />
             </div>
+            {today && today.runs === 0 ? (
+              <p className="mt-3 text-xs text-[var(--muted)]">
+                No {today.panelVersion} runs exist for {today.date} yet — the daily bootstrap
+                creates them at 01:00 UTC. Counts stay at zero until then, and runs from a
+                previous panel on the same date are excluded by design.
+              </p>
+            ) : null}
           </section>
 
           <section>
@@ -118,6 +139,7 @@ export default async function HealthPage() {
                 <thead className="bg-[color:var(--border)]/40 text-left text-xs uppercase tracking-wider text-[var(--muted)]">
                   <tr>
                     <th className="px-4 py-2">Model</th>
+                    <th className="px-4 py-2">Panel</th>
                     <th className="px-4 py-2">Latest run</th>
                     <th className="px-4 py-2">Status</th>
                   </tr>
@@ -125,22 +147,64 @@ export default async function HealthPage() {
                 <tbody>
                   {perModel.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="px-4 py-3 text-[var(--muted)]">
+                      <td colSpan={4} className="px-4 py-3 text-[var(--muted)]">
                         No runs yet.
                       </td>
                     </tr>
                   ) : (
-                    perModel.map((row) => (
-                      <tr key={row.modelSlug} className="border-t border-[var(--rule)]">
-                        <td className="px-4 py-2">{row.modelDisplayName}</td>
-                        <td className="px-4 py-2 font-mono text-xs">
-                          {formatDate(row.maxStartedAt)}
-                        </td>
-                        <td className="px-4 py-2">
-                          <StatusPill status={row.status} />
-                        </td>
-                      </tr>
-                    ))
+                    perModel.map((row) => {
+                      // This table lists every model that has ever run, so a
+                      // retired slot's final run looks exactly like a live
+                      // slot's latest one — same recent timestamp, same
+                      // "completed" pill. Llama 4 Scout last ran on
+                      // 2026-08-18 and has been dead since July. The panel
+                      // column is what disambiguates them.
+                      // Two independent facts, easily conflated:
+                      //   stalePanel — this model's most recent run predates
+                      //     the current panel. True for every slot on a
+                      //     changeover day, including healthy ones.
+                      //   droppedSlot — the current panel no longer collects
+                      //     this model at all. That is what "retired" means.
+                      // GPT-OSS 120B is stalePanel-but-not-dropped right
+                      // now; Llama 4 Scout is both. Only the second deserves
+                      // to be greyed out.
+                      const stalePanel = row.panelVersion !== MODEL_PANEL_VERSION;
+                      const droppedSlot = !activeSlugs.has(row.modelSlug);
+                      return (
+                        <tr
+                          key={row.modelSlug}
+                          className={`border-t border-[var(--rule)] ${
+                            droppedSlot ? "text-[var(--muted)]" : ""
+                          }`}
+                        >
+                          <td className="px-4 py-2">{row.modelDisplayName}</td>
+                          <td className="px-4 py-2">
+                            <span className="font-mono text-xs">{row.panelVersion}</span>
+                            {droppedSlot ? (
+                              <span
+                                className="ml-2 rounded bg-[color:var(--border)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+                                title="Not part of the current panel"
+                              >
+                                retired
+                              </span>
+                            ) : stalePanel ? (
+                              <span
+                                className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800"
+                                title="Still collected by the current panel, but its latest run predates it"
+                              >
+                                awaiting run
+                              </span>
+                            ) : null}
+                          </td>
+                          <td className="px-4 py-2 font-mono text-xs">
+                            {formatDate(row.maxStartedAt)}
+                          </td>
+                          <td className="px-4 py-2">
+                            <StatusPill status={row.status} />
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

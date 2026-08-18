@@ -18,6 +18,16 @@ export async function latestRunPerModel() {
       modelDisplayName: schema.runs.modelDisplayName,
       maxStartedAt: sql<Date>`MAX(${schema.runs.startedAt})`,
       status: sql<string>`(ARRAY_AGG(${schema.runs.status} ORDER BY ${schema.runs.startedAt} DESC))[1]`,
+      /**
+       * Panel the model's MOST RECENT run belonged to — not a group-by, or
+       * every model that survived a panel change would appear twice.
+       *
+       * This is what lets a reader tell a live slot from a retired one:
+       * the table lists every model that has ever run, so without it,
+       * Llama 4 Scout's last run (2026-08-18, "completed") is
+       * indistinguishable from a healthy current slot.
+       */
+      panelVersion: sql<string>`(ARRAY_AGG(${schema.runs.panelVersion} ORDER BY ${schema.runs.startedAt} DESC))[1]`,
     })
     .from(schema.runs)
     .groupBy(schema.runs.modelSlug, schema.runs.modelDisplayName)

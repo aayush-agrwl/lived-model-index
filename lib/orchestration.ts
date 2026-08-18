@@ -1,4 +1,4 @@
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, lt, sql } from "drizzle-orm";
 import { db, schema } from "./db/client";
 import { activeCollectors, MODEL_PANEL_VERSION } from "./models";
 import { ANCHOR_V2_VERSION, ANCHOR_V2_PROMPTS } from "./prompts/anchor-v2";
@@ -130,20 +130,45 @@ export async function bootstrapDailyRuns(date: string = todayUtc()): Promise<Boo
 
 /**
  * Count work remaining today: pending samples to collect, responses to rate.
+ *
+ * Scoped to ONE panel version, defaulting to the panel currently in the
+ * code. Without that scope the numbers break on any day a panel changes:
+ * 2026-08-18 already held seven panel_v4 runs (147 rows) written by the
+ * pre-v5 deploy that morning, so once v5 bootstrapped the same day, an
+ * unscoped query would have reported "147 / 294" — pooling a finished
+ * panel's work with the new panel's and making the day look half-done
+ * forever. The v4 rows are complete and will never change; they are simply
+ * not today's work any more.
+ *
+ * The date range is now half-open [date, date+1) rather than an open-ended
+ * `>= date`, so a run with a clock-skewed future timestamp cannot leak into
+ * today's totals.
  */
-export async function todayStatus(date: string = todayUtc()) {
+export async function todayStatus(
+  date: string = todayUtc(),
+  panelVersion: string = MODEL_PANEL_VERSION,
+) {
   const database = db();
 
-  // Find today's run IDs (by runKey prefix — easier than date parsing).
+  const dayStart = new Date(`${date}T00:00:00Z`);
+  const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+
   const todayRuns = await database
     .select()
     .from(schema.runs)
-    .where(gte(schema.runs.startedAt, new Date(`${date}T00:00:00Z`)));
+    .where(
+      and(
+        gte(schema.runs.startedAt, dayStart),
+        lt(schema.runs.startedAt, dayEnd),
+        eq(schema.runs.panelVersion, panelVersion),
+      ),
+    );
 
   const runIds = todayRuns.map((r) => r.id);
   if (runIds.length === 0) {
     return {
       date,
+      panelVersion,
       runs: 0,
       collectTotal: 0,
       collectDone: 0,
@@ -182,6 +207,7 @@ export async function todayStatus(date: string = todayUtc()) {
 
   return {
     date,
+    panelVersion,
     runs: todayRuns.length,
     collectTotal,
     collectDone,
